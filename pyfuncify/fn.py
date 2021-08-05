@@ -23,6 +23,9 @@ def deep_get(dict: Dict, path: List[str], default: Any=None) -> Any:
     if (fst in dict) and len(rst) == 0: return dict[fst]
     return deep_get(dict[fst], rst, default)
 
+def fst_rst(iterable: list) -> Tuple:
+    return (first(iterable), rest(iterable))
+
 def rest(iterable):
     return iterable[1:]
 
