@@ -2,7 +2,7 @@ from typing import Dict, Tuple
 from pymonad.tools import curry
 import requests
 
-from . import monad
+from . import monad, error
 
 class HttpError(error.PyFuncifyError):
     pass

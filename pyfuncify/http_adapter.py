@@ -6,8 +6,8 @@ from . import monad, http, logger, circuit
 
 @circuit.circuit_breaker()
 @backoff.on_predicate(backoff.expo, circuit.monad_failure_predicate, max_tries=circuit.max_retries(), jitter=None)
-def post(endpoint, body, auth=None, headers={}, encoding='json', circuit_config=None, name: str = __name__):
-    return invoke(endpoint=endpoint, headers=headers, auth=auth, body=body, encoding=encoding, name=name)
+def post(endpoint, body, auth=None, headers={}, encoding='json', circuit_config=None, name: str = __name__, http_timeout: float=5.0):
+    return invoke(endpoint=endpoint, headers=headers, auth=auth, body=body, encoding=encoding, name=name, http_timeout=http_timeout)
 
 @monad.monadic_try(name="http_adapter", exception_test_fn=http.http_response_monad(__name__, http.extract_by_content_type))
 @logger.with_perf_log(perf_log_type='http', name=__name__)

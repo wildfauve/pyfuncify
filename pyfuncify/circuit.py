@@ -47,7 +47,12 @@ def circuit_breaker():
     """
     Circuit Breaker Decorator.
 
-    Args:
+    The kwargs MAY include a 'circuit_config' which can manage the state of the circuit over multiple invocations.  Its not implemented
+    here, but must be injected in the args.  If its available it must support the following methods:
+    + circuit_state
+    + failures
+    + last_state_chg_time: Takes and returns the last state change time as a ISO8601 formatted str.
+    + circuit_state_writer
 
     """
     def inner(fn):
@@ -110,7 +115,7 @@ def open_circuit(circuit_config: Any) -> Any:
         return circuit_config
 
     circuit_config.circuit_state = circuit_transition(from_state=circuit_config.circuit_state, with_transition=transition_persistent_failure).value
-    circuit_config.last_state_chg_time = chronos.time_now(tz=chronos.tz_utc)
+    circuit_config.last_state_chg_time = chronos.time_now(tz=chronos.tz_utc())
     circuit_config.failures = 0
     circuit_config.circuit_state_writer(circuit_config)
     return circuit_config
