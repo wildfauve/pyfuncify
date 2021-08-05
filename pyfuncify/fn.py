@@ -1,7 +1,7 @@
+from typing import Dict, List, Any, Union, Callable, Tuple
 from pymonad.maybe import *
 from pymonad.tools import curry
 from pymonad.list import *
-from typing import Dict, List, Any, Union, Callable
 import re
 
 """
