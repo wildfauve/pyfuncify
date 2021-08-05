@@ -2,25 +2,47 @@ from typing import Tuple, Callable
 from simple_memory_cache import GLOBAL_CACHE
 import time, datetime
 
-from . import env, chronos, monad, http_adapter, error, constants, crypto, random_retry_window, logger, util
+from . import chronos, monad, http_adapter, constants, crypto, random_retry_window, logger, singleton
+
+expected_envs = ['client_id',
+                 'client_secret']
+
 
 token_cache = GLOBAL_CACHE.MemoryCachedVar('token_cache')
 
-class TokenError(error.ServiceError):
+class Error(Exception):
+    def __init__(self, message="", name="", ctx={}, code=500, klass="", retryable=False):
+        self.code = 500 if code is None else code
+        self.retryable = retryable
+        self.message = message
+        self.name = name
+        self.ctx = ctx
+        self.klass = klass
+        super().__init__(self.message)
+
+    def error(self):
+        return {'error': self.message, 'code': self.code, 'step': self.name, 'ctx': self.ctx}
+
+    def duplicate_error(self):
+        return "Duplicate" in self.message
+
+
+class TokenError(Error):
     pass
 
-class TokenEnvError(error.ServiceError):
+class TokenEnvError(Error):
     pass
 
-class TokenConfig(util.Singleton):
+class TokenConfig(singleton.Singleton):
 
-    def configure(self, token_persistence_provider: Callable) -> None:
+    def configure(self, token_persistence_provider: Callable, env: Any) -> None:
         self.token_persistence_provider = token_persistence_provider
+        self.env = env
         pass
 
 
 def token():
-    if not env.Env.expected_set():
+    if not env_set_up(env):
         return TokenEnvError(message="Token can not the retrieved due failure in env setup")
     result = get()
     if result.is_right() and (result.value.expired() or in_token_retry_window(result.value)):
@@ -131,16 +153,16 @@ def cache_writer(provider: Callable, bearer_token: str) -> monad.MEither:
     return result
 
 def client_id() -> str:
-    return env.Env.client_id()
+    return env.client_id()
 
 def client_secret() -> str:
-    return env.Env.client_secret()
+    return env.client_secret()
 
 def identity_token_endpoint() -> str:
-    return env.Env.identity_token_endpoint()
+    return env.identity_token_endpoint()
 
 def bearer_token_from_env():
-    return monad.Right(env.Env.bearer_token())
+    return monad.Right(env.bearer_token())
 
 def token_request_data():
     return {'audience': 'https://api.jarden.io', 'grant_type': 'client_credentials', 'scopes': 'openid'}
@@ -164,3 +186,6 @@ def build_token_error(result):
                       name="self token",
                       ctx=result.ctx,
                       code=result.code, retryable=False)
+
+def env_set_up(env):
+    return all(getattr(env, var)() for var in expected_envs)

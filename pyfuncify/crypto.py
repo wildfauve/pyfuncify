@@ -23,7 +23,7 @@ def validate(token):
     return not token.expired()
 
 @curry(1)
-@monad.monadic_try(name="decode_jwt", status=401)
+@monad.monadic_try(name="decode_jwt", status=401, error_cls=None)
 def decode_jwt(serialised_jwt: str) -> Tuple[str, dict]:
     """
     Parses the jwt and returns the claims without the validating using the public key

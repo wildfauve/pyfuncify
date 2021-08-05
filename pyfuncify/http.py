@@ -2,9 +2,9 @@ from typing import Dict, Tuple
 from pymonad.tools import curry
 import requests
 
-from . import monad, error
+from . import monad
 
-class HttpError(error.ServiceError):
+class HttpError(error.PyFuncifyError):
     pass
 
 class BearerTokenAuth(requests.auth.AuthBase):

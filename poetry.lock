@@ -213,18 +213,6 @@ optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
-name = "slack-sdk"
-version = "3.8.0"
-description = "The Slack API Platform SDK for Python"
-category = "main"
-optional = false
-python-versions = ">=3.6.0"
-
-[package.extras]
-optional = ["aiodns (>1.0)", "aiohttp (>=3.7.3,<4)", "boto3 (<=2)", "SQLAlchemy (>=1,<2)", "websockets (>=9.1,<10)", "websocket-client (>=1,<2)"]
-testing = ["pytest (>=5.4,<6)", "pytest-asyncio (<1)", "Flask-Sockets (>=0.2,<1)", "pytest-cov (>=2,<3)", "codecov (>=2,<3)", "flake8 (>=3,<4)", "black (==21.6b0)", "psutil (>=5,<6)", "databases (>=0.3)"]
-
-[[package]]
 name = "style"
 version = "1.1.6"
 description = "🌈 Terminal string styling"
@@ -251,7 +239,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "b64bff36ec5f61ad964f2962d37b3b01f7e3ab4b5ca03f41022443976d86b941"
+content-hash = "a6b50291cb48758e7d8d7eac4ec31fb98cb6b245b7b33ac7b25aafcee7902231"
 
 [metadata.files]
 atomicwrites = [
@@ -382,10 +370,6 @@ python-dateutil = [
 six = [
     {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
     {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
-]
-slack-sdk = [
-    {file = "slack_sdk-3.8.0-py2.py3-none-any.whl", hash = "sha256:802dd4297bde5c5092e24e268f8b3dcbd89cd100e8d68b94ad29f0269a67c86d"},
-    {file = "slack_sdk-3.8.0.tar.gz", hash = "sha256:cb90ce362b2497169cba5488c9ac0f6bc0d7941a3d6c4e4bee469c1cda391f39"},
 ]
 style = [
     {file = "style-1.1.6-py2.py3-none-any.whl", hash = "sha256:48deb552717e4a38e607e5c667b89f07f4eca5bce94dbaabb66707bf395a2eb6"},

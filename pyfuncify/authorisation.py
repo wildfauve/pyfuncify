@@ -1,72 +1,41 @@
+from typing import Callable, Any
 from pymonad.tools import curry
-from . import monad, slack, env, fn, error
+from . import monad, fn
 
-
-activity_namespace = "opbot"
-
-def authorise_slack_verification_token_policy(name: str):
+def authorise_activity_policy(name: str, ctx: str, namespace: str, pip_fn: Callable, error_cls: Any=None):
     """
-    Checks the validity of the SLack verification token from the event
-    """
-    def inner(f):
-        def invoke(*args, **kwargs):
-            valid_token = slack.verify_slack_token(token=fn.deep_get(kwargs['request'].request, ['body', 'token']))
-            if valid_token:
-                return monad.Right(f(*args, **kwargs))
-            else:
-                return monad.Left(error.ServiceError("Unauthorised", name, 401))
-        return invoke
-    return inner
+    Adds activity-based policy checking to the function.
 
-
-def authorise_slack_event_policy(name: str):
-    """
-    Adds slack event Signature check policy to handler
+    + Ctx is injected (the tokenised activity ctx of the fn).
+    + pip_fn is a callable which provides the PIP.  The PIP MUST be a dict with a 'subject' key, which has a function
+      'activities' which returns a set of activities.  For example:
+      {'subject': SlackSubject(slack_user='U09U563QC', profile_id='uuid_1', activities={'opbot:resource:mention:request', 'marketdata:resource:instrument:read-all'})}
     """
     def inner(fn):
         def invoke(*args, **kwargs):
-            valid_signature = slack.verify_slack_signature(event_body=kwargs['request'].request['body'],
-                                                           event_headers=kwargs['request'].request['headers'],
-                                                           slack_signing_secret=env.Env.slack_client_signing_secret())
-            if valid_signature:
+            pip = pip_fn()
+            if pip is None:
+                return monad.Left(error_cls("Unauthorised", name, 401)) if error_cls else monad.Left("Unauthorised")
+            if activity_policy(namespace, pip['subject'].activities, ctx):
                 return monad.Right(fn(*args, **kwargs))
             else:
-                return monad.Left(error.ServiceError("Unauthorised", name, 401))
+                return monad.Left(error_cls("Unauthorised", name, 401)) if error_cls else monad.Left("Unauthorised")
         return invoke
     return inner
 
 
-def authorise_activity_policy(name: str, ctx: str):
-    """
-    Adds activity-based policy checking to the function.
-    Ctx is injected (the tokenised activity ctx of the fn).
-    The args must include the Policy Information Point (PIP) containing activity claims
-    """
-    def inner(f):
-        def invoke(*args, **kwargs):
-            pip = kwargs['request'].pip
-            if pip is None:
-                return monad.Left(error.ServiceError("Unauthorised", name, 401))
-            if activity_policy(pip['subject'].activities, ctx):
-                return monad.Right(f(*args, **kwargs))
-            else:
-                return monad.Left(error.ServiceError("Unauthorised", name, 401))
-        return invoke
-    return inner
-
-
-@curry(2)
-def activity_policy(activities: list, ctx: dict) -> monad.MEither:
+@curry(3)
+def activity_policy(namespace: str, activities: list, ctx: dict) -> monad.MEither:
     """
     Takes Activities from an activity collection, and tests the provided context against them.
     Example:
         $ activity_policy(['opbot:resource:mention:request'])("opbot:resource:mention:request")
     """
-    return any(activity_matcher(ctx, activity) for activity in filter_for_service(activities))
+    return any(activity_matcher(ctx, activity) for activity in filter_for_service(namespace, activities))
 
 
-def filter_for_service(ctx: list) -> list:
-    return list(filter(lambda ct: activity_namespace in ct, ctx))
+def filter_for_service(namespace, ctx: list) -> list:
+    return list(filter(lambda ct: namespace in ct, ctx))
 
 @curry(2)
 def activity_matcher(context, activity):

@@ -1,8 +1,7 @@
 from pymonad.operators.either import Either
-from typing import Any, TypeVar, Callable, Union
+from typing import Any, TypeVar, Callable, Union, Any
 
 from .logger import logger
-from .error import ServiceError
 
 M = TypeVar('M') # pylint: disable=invalid-name
 S = TypeVar('S') # pylint: disable=invalid-name
@@ -39,7 +38,7 @@ def maybe_value_ok(value: T) -> bool:
 def maybe_value_fail(value: T) -> bool:
     return value.is_left()
 
-def monadic_try(name: str =None, status: int =None, exception_test_fn: Callable[[MEither], MEither]=None, error_cls: ServiceError=ServiceError):
+def monadic_try(name: str =None, status: int =None, exception_test_fn: Callable[[MEither], MEither]=None, error_cls: Any=None):
     """
     Monadic Try Decorator.  Decorate any function which might return an exception.  When the function does not return an exception,
     the decorator wraps the result in a Right(), otherwise, it wraps the exception in a Left()
@@ -63,7 +62,11 @@ def monadic_try(name: str =None, status: int =None, exception_test_fn: Callable[
                 test_fn = kwargs.get('expectation_fn', exception_test_fn)
                 return test_fn(result) if test_fn else result
             except Exception as e:
-                return Left(error_cls(message=str(e), name=(name or fn.__name__), code=status, klass=str(e.__class__)))
+                if error_cls:
+                    return Left(error_cls(message=str(e), name=(name or fn.__name__), code=status, klass=str(e.__class__)))
+                else:
+                    return Left(str(e))
+
         return try_it
     return inner
 
