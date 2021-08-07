@@ -1,14 +1,16 @@
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Any
 from simple_memory_cache import GLOBAL_CACHE
 import time, datetime
 
-from . import chronos, monad, http_adapter, constants, crypto, random_retry_window, logger, singleton
+from . import chronos, monad, http_adapter, crypto, random_retry_window, logger, singleton
 
 expected_envs = ['client_id',
                  'client_secret']
 
 
 token_cache = GLOBAL_CACHE.MemoryCachedVar('token_cache')
+
+BEARER_TOKEN = "BEARER_TOKEN"               # Name of bearer token in PS
 
 class Error(Exception):
     def __init__(self, message="", name="", ctx={}, code=500, klass="", retryable=False):
@@ -33,16 +35,43 @@ class TokenError(Error):
 class TokenEnvError(Error):
     pass
 
+"""
+The token config is setup by the library caller to provide 4 arguments:
+
++  token_persistence_provider.  This is a caller provided class or function which is provided with a token for persisting.
+   It also allows self_token to request a previously persisted token.  The token_persistence_provider must provide the following interfaces:
+   + write.  Takes a key and a value and persists the token (value) with the key (key).  It must return a monad result.
+   + read. Takes a key and returns an monad wrapping an object which responds to value which returns the token.
++  env.  An object which provides the following methods:
+   + client_id.  Returns the client id of the service for making token requests.
+   + client_secret. Returns the client secret of the service for making token requests.
+   + identity_token_endpoint. Returns the endpoint for the token request (client credentials grant).
+   + bearer_token.  Returns the bearer token if it exists in the env.
+   + set_env_var_with_value.  Takes a key and value and writes it to the env for retieval later with the bearer_token method.
+     Returns Tuple('ok', key, value)
++ window_width.  Int in seconds defining the width of the token getting window (used for randomly selecting a position to reduce
+                 competing lambdas from obtaining the token at the same time).
++ expiry_threshold. Int in seconds.  The number of seconds before the token expires that it will be refreshed.
+"""
 class TokenConfig(singleton.Singleton):
 
-    def configure(self, token_persistence_provider: Callable, env: Any) -> None:
+    default_window_width        = (60*60)  # chance of refreshing token within 1 hour band
+    default_expiry_threshold    = (60*60)  # The room to leave before the actual token expiry
+
+    def configure(self,
+                  token_persistence_provider: Callable,
+                  env: Any,
+                  window_width: int = default_window_width,
+                  expiry_threshold: int = default_expiry_threshold) -> None:
         self.token_persistence_provider = token_persistence_provider
         self.env = env
+        self.window_width = window_width
+        self.expiry_threshold = expiry_threshold
         pass
 
 
 def token():
-    if not env_set_up(env):
+    if not env_set_up(TokenConfig().env):
         return TokenEnvError(message="Token can not the retrieved due failure in env setup")
     result = get()
     if result.is_right() and (result.value.expired() or in_token_retry_window(result.value)):
@@ -130,52 +159,52 @@ def cache(bearer_token_tuple: Tuple[str, str]) -> monad.MEither:
     """
     get_location, bearer_token = bearer_token_tuple
     if get_location == 'from_env':
-        return monad.Right(('ok', constants.BEARER_TOKEN, bearer_token))
+        return monad.Right(('ok', BEARER_TOKEN, bearer_token))
 
     if get_location == "from_cache":
-        env.set_env_var_with_value(constants.BEARER_TOKEN, bearer_token)
-        return monad.Right(('ok', constants.BEARER_TOKEN, bearer_token))
+        TokenConfig().env.set_env_var_with_value(BEARER_TOKEN, bearer_token)
+        return monad.Right(('ok', BEARER_TOKEN, bearer_token))
 
     result = cache_writer(TokenConfig().token_persistence_provider, bearer_token)
-    env.set_env_var_with_value(constants.BEARER_TOKEN, bearer_token)
+    TokenConfig().env.set_env_var_with_value(BEARER_TOKEN, bearer_token)
     return result
 
 def cache_reader(provider: Callable):
     if not hasattr(provider, 'read'):
         return None
-    return provider.read(key=constants.BEARER_TOKEN)
+    return provider.read(key=BEARER_TOKEN)
 
 
 def cache_writer(provider: Callable, bearer_token: str) -> monad.MEither:
-    result = provider.write(constants.BEARER_TOKEN, bearer_token)
+    result = provider.write(BEARER_TOKEN, bearer_token)
     if result.is_right():
-        return monad.Right(('ok', constants.BEARER_TOKEN, bearer_token))
+        return monad.Right(('ok', BEARER_TOKEN, bearer_token))
     return result
 
 def client_id() -> str:
-    return env.client_id()
+    return TokenConfig().env.client_id()
 
 def client_secret() -> str:
-    return env.client_secret()
+    return TokenConfig().env.client_secret()
 
 def identity_token_endpoint() -> str:
-    return env.identity_token_endpoint()
+    return TokenConfig().env.identity_token_endpoint()
 
 def bearer_token_from_env():
-    return monad.Right(env.bearer_token())
+    return monad.Right(TokenConfig().env.bearer_token())
 
 def token_request_data():
     return {'audience': 'https://api.jarden.io', 'grant_type': 'client_credentials', 'scopes': 'openid'}
 
 def not_in_token_retry_window(bearer_token: str) -> bool:
     id_token = crypto.parse_generate_id_token(bearer_token)
-    return random_retry_window.left_of_window(width=constants.WINDOW_WIDTH,
-                                              end=id_token.value.exp - constants.EXPIRY_THRESHOLD,
+    return random_retry_window.left_of_window(width=TokenConfig().window_width,
+                                              end=id_token.value.exp - TokenConfig().expiry_threshold,
                                               at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
 
 def in_token_retry_window(id_token):
-    return random_retry_window.in_window(width=constants.WINDOW_WIDTH,
-                                         end=id_token.exp - constants.EXPIRY_THRESHOLD,
+    return random_retry_window.in_window(width=TokenConfig().window_width,
+                                         end=id_token.exp - TokenConfig().expiry_threshold,
                                          at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
 
 def cacheable_token():

@@ -13,10 +13,12 @@ PyJWT = "^2.1.0"
 pino = "^0.6.0"
 requests = "^2.26.0"
 backoff = "^1.11.1"
+simple-memory-cache = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 pytest = "^5.2"
 requests-mock = "^1.9.3"
+time-machine = "^2.3.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
