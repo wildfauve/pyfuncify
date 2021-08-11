@@ -1,7 +1,9 @@
-from typing import Any, Callable
+from typing import Any, Callable, Union, Optional, Protocol, TypeVar, Type
 from datetime import datetime
 
 from . import monad, error, state_machine, chronos, singleton
+
+T = TypeVar('T', bound='CircuitStateProviderProtocol')
 
 # Circuit States, transitions, and state machine
 transition_failure           = 'failure'
@@ -26,7 +28,7 @@ class CircuitOpen(error.PyFuncifyError):
     pass
 
 
-class CircuitConfig(singleton.Singleton):
+class CircuitConfiguration(singleton.Singleton):
     max_retries = 3
     # Factors that determine if a circuit should be placed in open state.
     # 3 failures in a 5 min period, opens the circuit
@@ -37,37 +39,60 @@ class CircuitConfig(singleton.Singleton):
     open_stand_down_period = 5 * 60
 
     def configure(self, *args, **kwargs):
-        self.circuit_store = kwargs.get('circuit_store', None)
         pass
 
+class CircuitStateProviderProtocol(Protocol):
+    def circuit_state(self) -> Union[None, str]:
+        """
+        Returns the current circuit state or None.  The circuit state machine is provided by the circuit breaker to the provider.
+        It comes from the state machine defined in circuit_state_map
+        """
+        ...
+
+    def failures(self) -> int:
+        ...
+
+    def last_state_chg_time(self) -> datetime:
+        ...
+
+    def update_state(self, failures: int,  last_state_chg_time: datetime, circuit_state: Union[None, str]) -> T:
+        """
+        Expects the circuit state to be updated
+        """
+        ...
+
+
 def max_retries():
-    return CircuitConfig().max_retries
+    return CircuitConfiguration().max_retries
 
 def circuit_breaker():
     """
     Circuit Breaker Decorator.
 
-    The kwargs MAY include a 'circuit_config' which can manage the state of the circuit over multiple invocations.  Its not implemented
-    here, but must be injected in the args.  If its available it must support the following methods:
+    The kwargs to the wrapped function MAY include a 'circuit_state_provider' argument which can manage the state of the circuit
+    over multiple invocations.  Its not implemented here, but must be injected in the args.
+    If its available it must support the following methods:
     + circuit_state
     + failures
     + last_state_chg_time: Takes and returns the last state change time as a ISO8601 formatted str.
     + circuit_state_writer
 
+    When a circuit_state_provider is not provided, the the circuit is a no-op.
+
     """
     def inner(fn):
         def breaker(*args, **kwargs):
-            circuit_config = kwargs.get('circuit_config', None)
-            if circuit_config and is_open(circuit_config) and is_in_stand_down_period(circuit_config.last_state_chg_time):
+            circuit_state_provider = kwargs.get('circuit_state_provider', None)
+            if circuit_state_provider and is_open(circuit_state_provider) and is_in_stand_down_period(circuit_state_provider.last_state_chg_time):
                 return monad.Left(CircuitOpen(message="Circuit Open", code=500))
 
             result = fn(*args, **kwargs)
 
-            if circuit_config:
+            if circuit_state_provider:
                 if result.is_left():
-                    circuit_failure(circuit_config)
+                    circuit_failure(circuit_state_provider)
                 else:
-                    transition_circuit_on_success(circuit_config)
+                    transition_circuit_on_success(circuit_state_provider)
             return result
         return breaker
     return inner
@@ -76,58 +101,56 @@ def circuit_breaker():
 def monad_failure_predicate(monad_result: monad.MEither) -> bool:
     return monad_result.is_left() #and env.Env.production()
 
-def circuit_failure(circuit_config: Any) -> Any:
-    if exhasted_failures_over_period(last_state_chg_time=circuit_config.last_state_chg_time, failures=circuit_config.failures):
-        open_circuit(circuit_config)
+def circuit_failure(circuit_state_provider: Any) -> Any:
+    if exhasted_failures_over_period(last_state_chg_time=circuit_state_provider.last_state_chg_time, failures=circuit_state_provider.failures):
+        open_circuit(circuit_state_provider)
         pass
     else:
-        update_circuit_failures(circuit_config)
+        update_circuit_failures(circuit_state_provider)
     pass
 
-def transition_circuit_on_success(circuit_config: Any) -> Any:
-    transition = circuit_transition(from_state=circuit_config.circuit_state, with_transition=transition_success)
-    if circuit_config.circuit_state != transition.value:
-        circuit_config.circuit_state = transition.value
-        circuit_config.last_state_chg_time = chronos.time_now(tz=chronos.tz_utc())
-        circuit_config.failures = 0
-        circuit_config.circuit_state_writer(circuit_config)
-    return circuit_config
+def transition_circuit_on_success(circuit_state_provider: Any) -> Any:
+    transition = circuit_transition(from_state=circuit_state_provider.circuit_state, with_transition=transition_success)
+    if circuit_state_provider.circuit_state != transition.value:
+        circuit_state_provider.update_state(circuit_state=transition.value,
+                                            last_state_chg_time=chronos.time_now(tz=chronos.tz_utc()),
+                                            failures=0)
+    return circuit_state_provider
 
 def exhasted_failures_over_period(last_state_chg_time: datetime, failures: int) -> bool:
     if last_state_chg_time is None:
         return False
-    return failures_within_time_threshold(last_state_chg_time) and (failures >= (CircuitConfig().failure_count_threshold) )
+    return failures_within_time_threshold(last_state_chg_time) and (failures >= (CircuitConfiguration().failure_count_threshold) )
 
 def failures_within_time_threshold(circuit_time: datetime) -> bool:
     """
     When the circuit is half open, we can retry until we reach the failure threshold.
     """
-    return (chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()]) - circuit_time.timestamp()) < CircuitConfig().failure_threshold_seconds
+    return (chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()]) - circuit_time.timestamp()) < CircuitConfiguration().failure_threshold_seconds
 
 def is_in_stand_down_period(last_state_chg_time: datetime) -> bool:
     """
     When the circuit is open there is a stand down period where the circuit will not be retried
     """
-    return (chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()]) - last_state_chg_time.timestamp()) < CircuitConfig().open_stand_down_period
+    return (chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()]) - last_state_chg_time.timestamp()) < CircuitConfiguration().open_stand_down_period
 
-def open_circuit(circuit_config: Any) -> Any:
-    if circuit_config.circuit_state == state_open:
-        return circuit_config
+def open_circuit(circuit_state_provider: Any) -> Any:
+    if circuit_state_provider.circuit_state == state_open:
+        return circuit_state_provider
 
-    circuit_config.circuit_state = circuit_transition(from_state=circuit_config.circuit_state, with_transition=transition_persistent_failure).value
-    circuit_config.last_state_chg_time = chronos.time_now(tz=chronos.tz_utc())
-    circuit_config.failures = 0
-    circuit_config.circuit_state_writer(circuit_config)
-    return circuit_config
+    circuit_state_provider.update_state(circuit_state=circuit_transition(from_state=circuit_state_provider.circuit_state, with_transition=transition_persistent_failure).value,
+                                        last_state_chg_time=chronos.time_now(tz=chronos.tz_utc()),
+                                        failures=0)
+    return circuit_state_provider
 
-def update_circuit_failures(circuit_config: Any) -> Any:
-    transition = circuit_transition(from_state=circuit_config.circuit_state, with_transition=transition_failure).value
-    if transition !=circuit_config.circuit_state:
-        circuit_config.circuit_state = transition
-        circuit_config.last_state_chg_time = chronos.time_now(tz=chronos.tz_utc())
-    circuit_config.failures = 1 if circuit_config.failures is None else circuit_config.failures + 1
-    circuit_config.circuit_state_writer(circuit_config)
-    return circuit_config
+def update_circuit_failures(circuit_state_provider: Any) -> Any:
+    transition = circuit_transition(from_state=circuit_state_provider.circuit_state, with_transition=transition_failure).value
+    if transition !=circuit_state_provider.circuit_state:
+        circuit_state_provider.update_state(circuit_state=transition,
+                                            last_state_chg_time=chronos.time_now(tz=chronos.tz_utc()),
+                                            failures=1 if circuit_state_provider.failures is None else circuit_state_provider.failures + 1)
+
+    return circuit_state_provider
 
 #
 # Circuit State Management

@@ -1,7 +1,6 @@
 from typing import List, Any, Tuple, Callable
 from dataclasses import dataclass, field
 from pymonad.reader import Pipe
-
 from pymonad.tools import curry
 
 from . import fn, monad
