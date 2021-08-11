@@ -106,7 +106,7 @@ def get_a_provider(from_args, from_config):
     From Args takes precidence.
     """
     args_provider = from_args.get('circuit_state_provider', None)
-    return from_config.circuit_state_provider if provider is None else args_provider
+    return from_config.circuit_state_provider if args_provider is None else args_provider
 
 def monad_failure_predicate(monad_result: monad.MEither) -> bool:
     return monad_result.is_left() #and env.Env.production()
