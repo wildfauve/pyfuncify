@@ -28,19 +28,6 @@ class CircuitOpen(error.PyFuncifyError):
     pass
 
 
-class CircuitConfiguration(singleton.Singleton):
-    max_retries = 3
-    # Factors that determine if a circuit should be placed in open state.
-    # 3 failures in a 5 min period, opens the circuit
-    failure_threshold_seconds = 5 * 60 # 5 minutes
-    failure_count_threshold = 3
-
-    # The number of minutes from the time a circuit transitioned to open before it can be retried
-    open_stand_down_period = 5 * 60
-
-    def configure(self, *args, **kwargs):
-        pass
-
 class CircuitStateProviderProtocol(Protocol):
     def circuit_state(self) -> Union[None, str]:
         """
@@ -60,6 +47,20 @@ class CircuitStateProviderProtocol(Protocol):
         Expects the circuit state to be updated
         """
         ...
+
+class CircuitConfiguration(singleton.Singleton):
+    max_retries = 3
+    # Factors that determine if a circuit should be placed in open state.
+    # 3 failures in a 5 min period, opens the circuit
+    failure_threshold_seconds = 5 * 60 # 5 minutes
+    failure_count_threshold = 3
+
+    # The number of minutes from the time a circuit transitioned to open before it can be retried
+    open_stand_down_period = 5 * 60
+
+    def configure(self, circuit_state_provider: Optional[CircuitStateProviderProtocol] = None):
+        self.circuit_state_provider = circuit_state_provider
+        pass
 
 
 def max_retries():
@@ -82,7 +83,7 @@ def circuit_breaker():
     """
     def inner(fn):
         def breaker(*args, **kwargs):
-            circuit_state_provider = kwargs.get('circuit_state_provider', None)
+            circuit_state_provider = get_a_provider(kwargs, CircuitConfiguration())
             if circuit_state_provider and is_open(circuit_state_provider) and is_in_stand_down_period(circuit_state_provider.last_state_chg_time):
                 return monad.Left(CircuitOpen(message="Circuit Open", code=500))
 
@@ -97,6 +98,12 @@ def circuit_breaker():
         return breaker
     return inner
 
+def get_a_provider(from_args, from_config):
+    """
+    From Args takes precidence.
+    """
+    provider = from_args.get('circuit_state_provider', None)
+    return from_config.circuit_state_provider if provider is None else provider
 
 def monad_failure_predicate(monad_result: monad.MEither) -> bool:
     return monad_result.is_left() #and env.Env.production()
