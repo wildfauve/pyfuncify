@@ -58,6 +58,9 @@ class CircuitConfiguration(singleton.Singleton):
     # The number of minutes from the time a circuit transitioned to open before it can be retried
     open_stand_down_period = 5 * 60
 
+    def __init__(self):
+        self.circuit_state_provider = None
+
     def configure(self, circuit_state_provider: Optional[CircuitStateProviderProtocol] = None):
         self.circuit_state_provider = circuit_state_provider
         pass
@@ -102,8 +105,8 @@ def get_a_provider(from_args, from_config):
     """
     From Args takes precidence.
     """
-    provider = from_args.get('circuit_state_provider', None)
-    return from_config.circuit_state_provider if provider is None else provider
+    args_provider = from_args.get('circuit_state_provider', None)
+    return from_config.circuit_state_provider if provider is None else args_provider
 
 def monad_failure_predicate(monad_result: monad.MEither) -> bool:
     return monad_result.is_left() #and env.Env.production()
