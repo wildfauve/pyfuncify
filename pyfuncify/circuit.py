@@ -49,7 +49,6 @@ class CircuitStateProviderProtocol(Protocol):
         ...
 
 class CircuitConfiguration(singleton.Singleton):
-    max_retries = 3
     # Factors that determine if a circuit should be placed in open state.
     # 3 failures in a 5 min period, opens the circuit
     failure_threshold_seconds = 5 * 60 # 5 minutes
@@ -60,9 +59,13 @@ class CircuitConfiguration(singleton.Singleton):
 
     def __init__(self):
         self.circuit_state_provider = None
+        self.max_retries = 3 # used by the backoff decorator to configure the number of retry attempts
 
-    def configure(self, circuit_state_provider: Optional[CircuitStateProviderProtocol] = None):
+    def configure(self,
+                  max_retries: int =None
+                  circuit_state_provider: Optional[CircuitStateProviderProtocol] = None):
         self.circuit_state_provider = circuit_state_provider
+        self.max_retries = max_retries
         pass
 
 
