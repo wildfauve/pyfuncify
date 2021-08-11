@@ -2,7 +2,6 @@ from pyfuncify import circuit, monad
 
 from .shared import *
 
-
 def test_1st_failure_to_half_open(circuit_state_provider):
     failure()(circuit_state_provider=circuit_state_provider)
     assert(circuit_state_provider.circuit_state) == "half_open"

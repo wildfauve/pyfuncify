@@ -1,7 +1,12 @@
 import pytest
 import requests
 
-from pyfuncify import http_adapter
+from pyfuncify import http_adapter, circuit
+
+from .shared import *
+
+def setup_module(module):
+    circuit.CircuitConfiguration().configure(max_retries=1)
 
 
 def test_success_http_call(request_mock):
@@ -26,6 +31,17 @@ def test_failed_http_call(request_http_failure_mock):
     assert(result.is_left()) == True
     assert(result.error().ctx) == {'status': 'boom'}
     assert(result.error().code) == 401
+
+def test_failed_http_call_with_circuit(request_http_failure_mock,
+                                       circuit_state_provider):
+    result = http_adapter.post(endpoint="https://example.host/resource",
+                               auth=None,
+                               body={'a': "mock_body"},
+                               circuit_state_provider=circuit_state_provider)
+
+    assert(result.is_left()) == True
+    assert circuit_state_provider.circuit_state == 'half_open'
+
 
 @pytest.fixture
 def request_mock(requests_mock):

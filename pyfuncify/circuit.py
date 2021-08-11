@@ -57,15 +57,11 @@ class CircuitConfiguration(singleton.Singleton):
     # The number of minutes from the time a circuit transitioned to open before it can be retried
     open_stand_down_period = 5 * 60
 
-    def __init__(self):
-        self.circuit_state_provider = None
-        self.max_retries = 3 # used by the backoff decorator to configure the number of retry attempts
-
     def configure(self,
                   max_retries: int =None,
                   circuit_state_provider: Optional[CircuitStateProviderProtocol] = None):
         self.circuit_state_provider = circuit_state_provider
-        self.max_retries = max_retries
+        self.max_retries = 3 if max_retries is None else max_retries # used by the backoff decorator to configure the number of retry attempts
         pass
 
 
