@@ -62,7 +62,7 @@ class CircuitConfiguration(singleton.Singleton):
         self.max_retries = 3 # used by the backoff decorator to configure the number of retry attempts
 
     def configure(self,
-                  max_retries: int =None
+                  max_retries: int =None,
                   circuit_state_provider: Optional[CircuitStateProviderProtocol] = None):
         self.circuit_state_provider = circuit_state_provider
         self.max_retries = max_retries
