@@ -17,6 +17,7 @@ def post_invoke(endpoint: str, headers: Dict, auth: Tuple, body: Any, encoding: 
     else:
         return requests.post(endpoint, auth=auth, headers={**headers, **encoding_to_content_type(encoding)}, data=body, timeout=http_timeout)
 
+
 def encoding_to_content_type(encoding):
     encodings = {'urlencoded': {'Content-Type': 'application/x-www-form-urlencoded'}}
     return encodings.get(encoding, {})
