@@ -4,8 +4,14 @@ from typing import Dict, Tuple, Any
 
 from . import monad, http, logger, circuit
 
+DEFAULT_MAX_RETRIES = 2
+
+def determine_retries():
+    return circuit.max_retries() or DEFAULT_MAX_RETRIES
+
+
 @circuit.circuit_breaker()
-@backoff.on_predicate(backoff.expo, circuit.monad_failure_predicate, max_tries=circuit.max_retries, jitter=None)
+@backoff.on_predicate(backoff.expo, circuit.monad_failure_predicate, max_tries=determine_retries(), jitter=None)
 def post(endpoint, body, auth=None, headers={}, encoding='json', circuit_state_provider=None, name: str = __name__, http_timeout: float=5.0):
     return post_invoke(endpoint=endpoint, headers=headers, auth=auth, body=body, encoding=encoding, name=name, http_timeout=http_timeout)
 

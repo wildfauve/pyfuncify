@@ -5,10 +5,7 @@ import datetime as dt
 
 from .shared import *
 
-from pyfuncify import self_token, chronos, fn, monad
-
-# from common import parameter_store, constants, chronos, fn
-# from functions.trading_event_publisher.domain import db_cache
+from pyfuncify import self_token, chronos, fn, monad, circuit
 
 class TokenPersistenceProvider():
     def __init__(self):
@@ -134,9 +131,53 @@ def test_token_grant_error(set_up_token_config_with_provider,
     result = self_token.token()
 
     assert result.is_left()
-    assert result.error().message == 'Client Credentials Grant Failure with status 401'
+    assert result.error().message == 'HTTP Error Response; Method:POST; Host: test.host'
     assert result.error().ctx == {'error': 'access_denied', 'error_description': 'Unauthorized'}
     assert result.error().code == 401
+
+def it_initialies_the_circuit_as_open_on_first_access_with_empty_circuit(set_up_token_config_with_provider_and_circuit,
+                                                                         set_up_env,
+                                                                         identity_request_mock):
+
+    self_token.token()
+
+    assert self_token.TokenConfig().circuit_state_provider.circuit_state == 'closed'
+    assert self_token.TokenConfig().circuit_state_provider.failures == 0
+
+
+def it_sets_the_circuit_to_half_open_on_failure(set_up_token_config_with_provider_and_circuit,
+                                                set_up_env,
+                                                identity_request_error_mock):
+
+    self_token.token()
+
+    assert self_token.TokenConfig().circuit_state_provider.circuit_state == 'half_open'
+    assert self_token.TokenConfig().circuit_state_provider.failures == 1
+
+
+def it_errors_with_circuit_open(set_up_token_config_with_provider_and_open_circuit,
+                                set_up_env,
+                                identity_request_mock):
+
+    result = self_token.token()
+
+    assert result.is_left()
+    assert result.error().error() == {'error': 'Circuit Open', 'code': 500, 'step': 'self token', 'ctx': {'circuit_state': 'open', 'failures': 3}}
+
+def it_sets_the_circuit_to_half_closed_from_open_on_success(set_up_token_config_with_provider_and_open_circuit,
+                                                            set_up_env,
+                                                            identity_request_mock):
+
+    traveller = time_machine.travel(chronos.time_with_delta(minutes=10))
+    traveller.start()
+
+    result = self_token.token()
+
+    assert self_token.TokenConfig().circuit_state_provider.circuit_state == 'half_closed'
+    assert self_token.TokenConfig().circuit_state_provider.failures == 0
+
+    traveller.stop()
+
 
 def looks_like_a_jwt(possible_token):
     return (fn.match('^ey', possible_token) is not None) and (len(possible_token.split(".")) == 3)
@@ -156,6 +197,21 @@ def identity_request_error_mock(requests_mock):
 @pytest.fixture
 def set_up_token_config_with_provider():
     self_token.TokenConfig().configure(token_persistence_provider=TokenPersistenceProvider(), env=Env())
+
+@pytest.fixture
+def set_up_token_config_with_provider_and_circuit(circuit_state_provider):
+    circuit.CircuitConfiguration().configure()
+    self_token.TokenConfig().configure(token_persistence_provider=TokenPersistenceProvider(),
+                                       env=Env(),
+                                       circuit_state_provider=circuit_state_provider)
+
+@pytest.fixture
+def set_up_token_config_with_provider_and_open_circuit(circuit_state_provider_in_open_state):
+    circuit.CircuitConfiguration().configure()
+    self_token.TokenConfig().configure(token_persistence_provider=TokenPersistenceProvider(),
+                                       env=Env(),
+                                       circuit_state_provider=circuit_state_provider_in_open_state)
+
 
 @pytest.fixture
 def set_up_env():

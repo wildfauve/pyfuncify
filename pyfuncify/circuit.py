@@ -15,6 +15,7 @@ state_open                   = 'open'
 state_closed                 = 'closed'
 circuit_state_map = state_machine.state_transition_map([(None,              transition_failure,            state_half_open),
                                                        (None,               transition_persistent_failure, state_open),
+                                                       (None,               transition_success,            state_closed),
                                                        (state_half_open,    transition_persistent_failure, state_open),
                                                        (state_half_closed,  transition_persistent_failure, state_open),
                                                        (state_half_closed,  transition_failure,            state_half_open),
@@ -64,9 +65,12 @@ class CircuitConfiguration(singleton.Singleton):
         self.max_retries = 3 if max_retries is None else max_retries # used by the backoff decorator to configure the number of retry attempts
         pass
 
+    def provider(self):
+        return self.circuit_state_provider if hasattr(self, "circuit_state_provider") else None
+
 
 def max_retries():
-    return CircuitConfiguration().max_retries
+    return CircuitConfiguration().max_retries if hasattr(CircuitConfiguration(), 'max_retries') else None
 
 def circuit_breaker():
     """
@@ -87,7 +91,9 @@ def circuit_breaker():
         def breaker(*args, **kwargs):
             circuit_state_provider = get_a_provider(kwargs, CircuitConfiguration())
             if circuit_state_provider and is_open(circuit_state_provider) and is_in_stand_down_period(circuit_state_provider.last_state_chg_time):
-                return monad.Left(CircuitOpen(message="Circuit Open", code=500))
+                return monad.Left(CircuitOpen(message="Circuit Open",
+                                              code=500,
+                                              ctx={'circuit_state': circuit_state_provider.circuit_state, 'failures': circuit_state_provider.failures}))
 
             result = fn(*args, **kwargs)
 
@@ -105,7 +111,7 @@ def get_a_provider(from_args, from_config):
     From Args takes precidence.
     """
     args_provider = from_args.get('circuit_state_provider', None)
-    return from_config.circuit_state_provider if args_provider is None else args_provider
+    return from_config.provider() if args_provider is None else args_provider
 
 def monad_failure_predicate(monad_result: monad.MEither) -> bool:
     return monad_result.is_left() #and env.Env.production()

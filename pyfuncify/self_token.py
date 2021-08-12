@@ -2,7 +2,7 @@ from typing import Tuple, Callable, Any
 from simple_memory_cache import GLOBAL_CACHE
 import time, datetime
 
-from . import chronos, monad, http_adapter, crypto, random_retry_window, logger, singleton
+from . import chronos, monad, http_adapter, crypto, random_retry_window, logger, singleton, circuit
 
 expected_envs = ['client_id',
                  'client_secret']
@@ -61,10 +61,12 @@ class TokenConfig(singleton.Singleton):
     def configure(self,
                   token_persistence_provider: Callable,
                   env: Any,
+                  circuit_state_provider: circuit.CircuitStateProviderProtocol = None,
                   window_width: int = default_window_width,
                   expiry_threshold: int = default_expiry_threshold) -> None:
         self.token_persistence_provider = token_persistence_provider
         self.env = env
+        self.circuit_state_provider = circuit_state_provider
         self.window_width = window_width
         self.expiry_threshold = expiry_threshold
         pass
@@ -142,7 +144,9 @@ def token_service(bearer_token):
                                headers={},
                                body=token_request_data(),
                                encoding='urlencoded',
-                               name='token_service')
+                               name='token_service',
+                               circuit_state_provider=TokenConfig().circuit_state_provider)
+
 
     return monad.Right(('from_grant', result.value[1]['access_token'])) if result.is_right() else monad.Left(build_token_error(result.error()))
 
@@ -211,7 +215,7 @@ def cacheable_token():
     return token_cache.get()
 
 def build_token_error(result):
-    return TokenError(message="Client Credentials Grant Failure with status {}".format(result.code),
+    return TokenError(message=result.message,
                       name="self token",
                       ctx=result.ctx,
                       code=result.code, retryable=False)
