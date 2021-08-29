@@ -30,6 +30,9 @@ class CircuitOpen(error.PyFuncifyError):
 
 
 class CircuitStateProviderProtocol(Protocol):
+    def __init__(self, circuit_name: Union[None, str]):
+        ...
+
     def circuit_state(self) -> Union[None, str]:
         """
         Returns the current circuit state or None.  The circuit state machine is provided by the circuit breaker to the provider.

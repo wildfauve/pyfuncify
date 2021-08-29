@@ -4,7 +4,8 @@ from datetime import datetime
 from pyfuncify import circuit, chronos
 
 class CircuitStateProvider(circuit.CircuitStateProviderProtocol):
-    def __init__(self):
+    def __init__(self, circuit_name=None):
+        self.circuit_name = circuit_name
         self.circuit_state = None
         self.failures = 0
         self.last_state_chg_time = None
@@ -29,7 +30,7 @@ class CircuitStateProvider(circuit.CircuitStateProviderProtocol):
 
 @pytest.fixture
 def circuit_state_provider():
-    return CircuitStateProvider()
+    return CircuitStateProvider(circuit_name="test-circuit")
 
 @pytest.fixture
 def circuit_state_provider_in_open_state():
