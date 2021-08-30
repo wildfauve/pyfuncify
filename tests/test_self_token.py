@@ -62,7 +62,8 @@ def test_token_persisted_in_provider(set_up_token_config_with_provider, set_up_e
     assert result.value.jwt == token.value.value
 
 
-def it_refreshes_the_token_from_cache_when_not_in_env(set_up_token_config_with_provider,
+def it_refreshes_the_token_from_cache_when_not_in_env(dynamo_mock_empty,
+                                                      set_up_token_config_with_provider,
                                                       set_up_env,
                                                       identity_request_mock,
                                                       generate_valid_signed_jwt):
@@ -179,6 +180,43 @@ def it_sets_the_circuit_to_half_closed_from_open_on_success(set_up_token_config_
     traveller.stop()
 
 
+def test_with_a_dynamo_backed_circuit(dynamo_mock_empty,
+                                      set_up_env,
+                                      identity_request_mock,
+                                      generate_expired_signed_jwt):
+
+    set_up_token_config_with_provider_and_dynamo_backed_circuit(DynamoCircuitStore(circuit_name="test-circuit"))
+
+    self_token.TokenConfig().token_persistence_provider.write(self_token.BEARER_TOKEN, generate_expired_signed_jwt)
+
+    self_token.token()
+
+    cir = repo.find_circuit_by_id('test-circuit')
+
+    assert( cir.value.circuit_state) == 'closed'
+
+def test_with_a_dynamo_backed_circuit_when_initialised(dynamo_mock_empty,
+                                                       set_up_env,
+                                                       identity_request_mock,
+                                                       generate_expired_signed_jwt):
+    repo.create_circuit('test-circuit')
+
+    cir = repo.find_circuit_by_id('test-circuit')
+
+    assert cir.is_right()
+
+    set_up_token_config_with_provider_and_dynamo_backed_circuit(DynamoCircuitStore(circuit_name="test-circuit"))
+
+    self_token.TokenConfig().token_persistence_provider.write(self_token.BEARER_TOKEN, generate_expired_signed_jwt)
+
+    self_token.token()
+
+    cir = repo.find_circuit_by_id('test-circuit')
+
+    assert( cir.value.circuit_state) == 'closed'
+
+
+
 def looks_like_a_jwt(possible_token):
     return (fn.match('^ey', possible_token) is not None) and (len(possible_token.split(".")) == 3)
 
@@ -204,6 +242,12 @@ def set_up_token_config_with_provider_and_circuit(circuit_state_provider):
     self_token.TokenConfig().configure(token_persistence_provider=TokenPersistenceProvider(),
                                        env=Env(),
                                        circuit_state_provider=circuit_state_provider)
+
+def set_up_token_config_with_provider_and_dynamo_backed_circuit(provider):
+    self_token.TokenConfig().configure(token_persistence_provider=TokenPersistenceProvider(),
+                                       env=Env(),
+                                       circuit_state_provider=provider)
+
 
 @pytest.fixture
 def set_up_token_config_with_provider_and_open_circuit(circuit_state_provider_in_open_state):
