@@ -1,8 +1,8 @@
 from typing import Tuple, Callable, Any
 from simple_memory_cache import GLOBAL_CACHE
-import time, datetime
 
 from . import chronos, monad, http_adapter, crypto, random_retry_window, logger, singleton, circuit
+from .tracer import Tracer
 
 expected_envs = ['client_id',
                  'client_secret']
@@ -11,6 +11,8 @@ expected_envs = ['client_id',
 token_cache = GLOBAL_CACHE.MemoryCachedVar('token_cache')
 
 BEARER_TOKEN = "BEARER_TOKEN"               # Name of bearer token in PS
+
+_CTX = {}
 
 class Error(Exception):
     def __init__(self, message="", name="", ctx={}, code=500, klass="", retryable=False):
@@ -72,14 +74,16 @@ class TokenConfig(singleton.Singleton):
         pass
 
 
-def token():
+def token(tracer: Tracer=None):
+    _CTX['tracer'] = tracer
     if not env_set_up(TokenConfig().env):
         return TokenEnvError(message="Token can not the retrieved due failure in env setup")
     result = get()
     if result.is_right() and (result.value.expired() or in_token_retry_window(result.value)):
         logger.log(level='info',
                    msg='Self Token Cache Miss',
-                   ctx={'expired': result.value.expired(), 'in_window': in_token_retry_window(result.value)}, tracer=None)
+                   ctx={'expired': result.value.expired(), 'in_window': in_token_retry_window(result.value)},
+                   tracer=tracer_from_ctx())
         invalidate_cache()
         return get()
     return result
@@ -90,6 +94,9 @@ def get():
         return crypto.parse_generate_id_token(result.value)
     else:
         return result
+
+def cacheable_token():
+    return token_cache.get()
 
 def invalidate_cache():
     token_cache.invalidate()
@@ -137,7 +144,7 @@ def token_service(bearer_token):
                ctx={'valid': token_state[0],
                     'exp': token_state[1],
                     'in_window': not_in_wind},
-               tracer=None)
+               tracer=tracer_from_ctx())
 
     result = http_adapter.post(endpoint=identity_token_endpoint(),
                                auth=(client_id(), client_secret()),
@@ -211,9 +218,6 @@ def in_token_retry_window(id_token):
                                          end=id_token.exp - TokenConfig().expiry_threshold,
                                          at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
 
-def cacheable_token():
-    return token_cache.get()
-
 def build_token_error(result):
     return TokenError(message=result.message,
                       name="self token",
@@ -222,3 +226,6 @@ def build_token_error(result):
 
 def env_set_up(env):
     return all(getattr(env, var)() for var in expected_envs)
+
+def tracer_from_ctx():
+    return _CTX['tracer']

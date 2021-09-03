@@ -40,6 +40,9 @@ class Env():
         os.environ[key] = value
         return ('ok', key, value)
 
+class Tracer():
+    def serialise(self):
+        return {'env': 'test', 'handler_id': 'e5655b5f-e677-4a12-b8d7-0fa0b7e9dd20', 'aws_request_id': 'handler-id-1'}
 
 
 def setup_function():
@@ -49,13 +52,13 @@ def setup_function():
 
 
 def test_get_token_for_the_very_first_time(set_up_token_config_with_provider, set_up_env, identity_request_mock):
-    result = self_token.token()
+    result = self_token.token(tracer=Tracer())
 
     assert result.is_right() == True
     assert result.value.sub == "1@clients"
 
 def test_token_persisted_in_provider(set_up_token_config_with_provider, set_up_env, identity_request_mock):
-    result = self_token.token()
+    result = self_token.token(tracer=Tracer())
 
     token = self_token.TokenConfig().token_persistence_provider.read(self_token.BEARER_TOKEN)
 
