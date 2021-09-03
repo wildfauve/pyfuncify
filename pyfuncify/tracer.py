@@ -8,7 +8,7 @@ class Tracer():
         self.handler_id = uuid.uuid4()
 
     def serialise(self):
-        return {'env': self.env, 'handler_id': self.handler_id_to_s(), 'aws_request_id': aws_request_id()}
+        return {'env': self.env, 'handler_id': self.handler_id_to_s(), 'aws_request_id': self.aws_request_id()}
 
     def handler_id_to_s(self):
         return str(self.handler_id) if isinstance(self.handler_id, uuid.UUID) else self.handler_id
