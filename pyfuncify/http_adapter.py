@@ -1,5 +1,5 @@
 import requests
-import backoff
+1
 from typing import Dict, Tuple, Any
 
 from . import monad, http, logger, circuit

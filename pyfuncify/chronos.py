@@ -58,3 +58,7 @@ def hours_from_start_from_year(time: datetime) -> int:
 
 def hours_from_start_from_year_to_days_hours(start_time: datetime, hour: int) -> datetime:
     return time_with_delta(start_time, hours=hour)
+
+def now_year_day() -> Tuple[int, int]:
+    t = time_now(tz=timezone.utc)
+    return (t.year, t.strftime("%j"))

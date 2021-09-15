@@ -1,4 +1,4 @@
-from typing import Dict, List, Any, Union, Callable, Tuple
+from typing import Dict, Tuple
 from pymonad.maybe import *
 from pymonad.tools import curry
 from pymonad.list import *
@@ -86,7 +86,6 @@ def select(fn: Callable, xs: List) -> filter:
     returns all values from the list that are true when applying the fn to the item
     """
     return filter(fn, xs)
-    # return iter([element for element in xs if fn(element)])
 
 # + field_fn; the property to extract from the record.  Either a String or a Function which takes the record
 # + test_value; the value which has == applied to determine equality
