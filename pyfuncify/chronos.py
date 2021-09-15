@@ -61,4 +61,4 @@ def hours_from_start_from_year_to_days_hours(start_time: datetime, hour: int) ->
 
 def now_year_day() -> Tuple[int, int]:
     t = time_now(tz=timezone.utc)
-    return (t.year, t.strftime("%j"))
+    return (t.year, int(t.strftime("%j")))

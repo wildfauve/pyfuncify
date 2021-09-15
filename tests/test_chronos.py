@@ -1,4 +1,6 @@
 import pytest
+from datetime import datetime
+import time_machine
 
 from pyfuncify import chronos
 
@@ -17,3 +19,11 @@ def it_returns_time_as_epoch():
     time_epoch = chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])
 
     assert(isinstance(time_epoch, float)) == True
+
+
+@time_machine.travel(datetime(2021, 8, 2, 9, 5, tzinfo=chronos.tz_utc()))
+def it_generates_now_year_and_day():
+    year, day = chronos.now_year_day()
+
+    assert year == 2021
+    assert day == 214
