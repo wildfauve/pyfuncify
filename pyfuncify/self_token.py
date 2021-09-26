@@ -154,7 +154,6 @@ def token_service(bearer_token):
                                name='token_service',
                                circuit_state_provider=TokenConfig().circuit_state_provider)
 
-
     return monad.Right(('from_grant', result.value[1]['access_token'])) if result.is_right() else monad.Left(build_token_error(result.error()))
 
 def from_cache(bearer_token):

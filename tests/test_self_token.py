@@ -135,7 +135,7 @@ def test_token_grant_error(set_up_token_config_with_provider,
     result = self_token.token()
 
     assert result.is_left()
-    assert result.error().message == 'HTTP Error Response; Method:POST; Host: test.host'
+    assert result.error().message == 'HTTP Error Response; POST ; https://test.host/token ; None'
     assert result.error().ctx == {'error': 'access_denied', 'error_description': 'Unauthorized'}
     assert result.error().code == 401
 

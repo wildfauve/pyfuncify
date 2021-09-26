@@ -117,7 +117,7 @@ def get_a_provider(from_args, from_config):
     return from_config.provider() if args_provider is None else args_provider
 
 def monad_failure_predicate(monad_result: monad.MEither) -> bool:
-    return monad_result.is_left() #and env.Env.production()
+    return monad_result.is_left()
 
 def circuit_failure(circuit_state_provider: Any) -> Any:
     if exhasted_failures_over_period(last_state_chg_time=circuit_state_provider.last_state_chg_time, failures=circuit_state_provider.failures):

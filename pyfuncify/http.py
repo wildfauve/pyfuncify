@@ -40,7 +40,13 @@ def http_response_monad(step, extract_fn, response) -> Tuple[int, dict]:
     if response.value.status_code in [200,201]:
         return monad.Right((response.value.status_code, extract_fn(response.value)))
     else:
-        return monad.Left(HttpError(message="HTTP Error Response; Method:{}; Host: {}".format(response.value.request.method, response.value.request.hostname),
+        return monad.Left(HttpError(message=format_error(response.value),
                                     name=step,
                                     code=response.value.status_code,
                                     ctx=extract_fn(response.value)))
+
+
+def format_error(resp: requests.models.Response) -> str:
+    return "HTTP Error Response; {mth} ; {url} ; {reason}".format(mth=resp.request.method,
+                                                                  url=resp.request.url,
+                                                                  reason=resp.reason)
