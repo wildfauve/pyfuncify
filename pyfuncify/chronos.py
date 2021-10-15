@@ -3,6 +3,7 @@ from dateutil.parser import parse as date_parser
 from datetime import datetime, timedelta, timezone
 from operator import methodcaller
 from functools import reduce
+import pytz
 
 def time_now(tz: timezone = timezone.utc, apply: Callable = None) -> datetime:
     """
@@ -19,6 +20,13 @@ def time_now(tz: timezone = timezone.utc, apply: Callable = None) -> datetime:
     if apply is None:
         return dt
     return apply_appliers(dt, apply)
+
+def tz_convert(time, zone):
+    """
+    Converts a time from one TZ to another.
+    The Zone is obtained from the tz() fn
+    """
+    return time.astimezone(zone)
 
 def apply_appliers(obj, appliers: List[Callable]):
     return reduce(apply_applier, appliers, obj)
@@ -40,6 +48,12 @@ def epoch():
 
 def tz_utc():
     return timezone.utc
+
+def tz(zone_name):
+    if zone_name in  pytz.common_timezones:
+        return pytz.timezone(zone_name)
+    return None
+
 
 def time_now_with_delta_seconds(delta):
     inc = timedelta(seconds=delta)

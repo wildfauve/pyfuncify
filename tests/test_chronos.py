@@ -20,7 +20,23 @@ def it_returns_time_as_epoch():
 
     assert(isinstance(time_epoch, float)) == True
 
+@time_machine.travel(datetime(2021, 10, 16, 9, 0, tzinfo=chronos.tz_utc()))
+def it_converts_time_from_utc_to_alternate_tz():
+    utc_now = chronos.time_now(tz=chronos.tz_utc())
+    sydney_time = chronos.tz_convert(utc_now, chronos.tz('Australia/Sydney'))
 
+    expected_time =  chronos.tz('Australia/Sydney').localize(datetime(2021, 10, 16, 20, 0), is_dst=True)
+
+    assert sydney_time == expected_time
+
+@time_machine.travel(datetime(2021, 10, 16, 9, 0, tzinfo=chronos.tz_utc()))
+def it_converts_time_from_tz_to_utc():
+    sydney_time = chronos.time_now(tz=chronos.tz('Australia/Sydney'))
+
+    utc_time = chronos.tz_convert(sydney_time, chronos.tz('UTC'))
+
+    assert sydney_time.hour == 20
+    assert utc_time.hour == 9
 
 
 @time_machine.travel(datetime(2021, 8, 2, 9, 5, tzinfo=chronos.tz_utc()))
