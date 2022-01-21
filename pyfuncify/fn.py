@@ -131,4 +131,4 @@ def only_one(xs: List[Any]) -> bool:
     return len(xs) == 1
 
 def compose_iter(fn_list: List, initial_val):
-    return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val))
+    return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val)).flush()
