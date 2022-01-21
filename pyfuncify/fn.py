@@ -1,7 +1,9 @@
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 from pymonad.maybe import *
 from pymonad.tools import curry
 from pymonad.list import *
+from pymonad.reader import Pipe
+from functools import reduce
 import re
 
 """
@@ -127,3 +129,6 @@ def not_empty(xs: List[Any]) -> bool:
 
 def only_one(xs: List[Any]) -> bool:
     return len(xs) == 1
+
+def compose_iter(fn_list: List, initial_val):
+    return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val))
