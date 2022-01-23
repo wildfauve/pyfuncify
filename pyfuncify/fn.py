@@ -1,9 +1,10 @@
-from typing import Dict, Tuple, List
+from typing import Dict, Tuple, List, Callable
 from pymonad.maybe import *
 from pymonad.tools import curry
 from pymonad.list import *
 from pymonad.reader import Pipe
 from functools import reduce
+from operator import iconcat
 import re
 
 """
@@ -117,12 +118,15 @@ def match(pattern, test_string):
 
 # Curryed fn that removes elements from a collection where f.(e) is true
 @curry(2)
-def remove(fn, xs):
-    return list(filter(fn, xs))
+def remove(fn: Callable, xs: List) -> List:
+    return list(filter(negated_fn(fn), xs))
 
+@curry(2)
+def negated_fn(fn: Callable, x):
+    return not fn(x)
 
 def remove_none(xs):
-    return remove(lambda x: x is not None, xs)
+    return list(filter(lambda x: x is not None, xs))
 
 def not_empty(xs: List[Any]) -> bool:
     return len(xs) > 0
@@ -132,3 +136,7 @@ def only_one(xs: List[Any]) -> bool:
 
 def compose_iter(fn_list: List, initial_val):
     return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val)).flush()
+
+
+def flatten(xs: List):
+    return reduce(iconcat, xs, [])
