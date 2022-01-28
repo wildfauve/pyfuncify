@@ -48,14 +48,14 @@ def it_generates_now_year_and_day():
 
 
 @time_machine.travel(datetime(2021, 8, 2, 9, 5, tzinfo=chronos.tz_utc()))
-def moves_deltas():
+def it_moves_deltas():
     time = datetime(2021, 8, 2, 9, 5, tzinfo=chronos.tz_utc())
 
     delta_t_forward = chronos.time_with_delta(time, hours=12, direction='inc')
 
-    assert(delta_t_forward.hour) == 17
+    assert(delta_t_forward.hour) == 21
 
     delta_t_back = chronos.time_with_delta(time, hours=12, direction='dec')
 
-    assert (delta_t_back.hour) == 17
+    assert (delta_t_back.hour) == 21
     assert (delta_t_back.day) == 1
