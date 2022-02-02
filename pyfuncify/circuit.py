@@ -116,8 +116,16 @@ def get_a_provider(from_args, from_config):
     args_provider = from_args.get('circuit_state_provider', None)
     return from_config.provider() if args_provider is None else args_provider
 
-def monad_failure_predicate(monad_result: monad.MEither) -> bool:
-    return monad_result.is_left()
+def monad_failure_predicate(monad_result: Union[Any, monad.MEither]) -> bool:
+    return isinstance(monad_result, monad.MEither) and monad_result.is_left()
+
+def http_retryable_monad_failure_predicate(monad_result: Union[Any, monad.MEither]) -> bool:
+    """
+    HTTP Client-based errors (400-series) are not retryable 
+    """
+    if not isinstance(monad_result, monad.MEither):
+        return False
+    return monad_result.is_left() and monad_result.error().retryable
 
 def circuit_failure(circuit_state_provider: Any) -> Any:
     if exhasted_failures_over_period(last_state_chg_time=circuit_state_provider.last_state_chg_time, failures=circuit_state_provider.failures):

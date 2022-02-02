@@ -22,6 +22,7 @@ requests-mock = "^1.9.3"
 time-machine = "^2.3.1"
 moto = "^2.2.6"
 pynamodb = "^5.1.0"
+pytest-mock = "^3.7.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

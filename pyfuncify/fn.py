@@ -1,7 +1,8 @@
 from typing import Dict, Tuple, List, Callable
+from collections.abc import Iterable
 from pymonad.maybe import *
 from pymonad.tools import curry
-from pymonad.list import *
+# from pymonad.list import *
 from pymonad.reader import Pipe
 from functools import reduce
 from operator import iconcat
@@ -21,6 +22,8 @@ def deep_get(dict: Dict, path: List[str], default: Any=None) -> Any:
     Example:
         $ deep_get({'a': {'b': 1}}, ['a', 'b'], 0)
     """
+    if not isinstance(path, Iterable):
+        return None
     fst, rst = first(path), rest(path)
     if fst not in dict: return default
     if (fst in dict) and len(rst) == 0: return dict[fst]
@@ -68,10 +71,13 @@ def first(iterable, default=None, key=None):
 def find_by_type(type, iterable):
     return partial_filter(type_predicate(type), iterable).then(partial_first)
 
+def find_by_predicate(predicate_fn: Callable, iterable: List):
+    return partial_filter(predicate_fn, iterable).then(partial_first)
+
 def type_predicate(type):
     return lambda x: x['_type'] == type
 
-def partial_filter(fn, iterable):
+def partial_filter(fn: Callable, iterable: List):
     return Just(list(filter(fn, iterable)))
 
 def find_by_filter(fn, xs):
