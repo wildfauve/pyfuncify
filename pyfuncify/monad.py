@@ -38,17 +38,22 @@ def maybe_value_ok(value: T) -> bool:
 def maybe_value_fail(value: T) -> bool:
     return value.is_left()
 
-def monadic_try(name: str =None, status: int =None, exception_test_fn: Callable[[MEither], MEither]=None, error_cls: Any=None):
+def monadic_try(name: str =None,
+                status: int =None,
+                exception_test_fn: Callable[[MEither], MEither]=None,
+                error_cls: Any=None,
+                error_result_fn: Callable=None):
     """
     Monadic Try Decorator.  Decorate any function which might return an exception.  When the function does not return an exception,
     the decorator wraps the result in a Right(), otherwise, it wraps the exception in a Left()
 
     Args:
         name: The name to be provided to the error object
-        status: The status (http) to be provided to the error object
+        status: The status to be provided to the error object
         exception_test_fn: A function which takes the result.
                            When the result is Right, but the data may result in a Left.
                            The fn must return a value wrapped in an Either
+        error_result_fn:   A function whose result will be returned in the exception flow.  It takes a built exception (either str or error_cls)
 
     The @monadic_try(name="step") is really syntax sugar for:
         $ monadic_try(name="x")(fn)(args)
@@ -62,10 +67,9 @@ def monadic_try(name: str =None, status: int =None, exception_test_fn: Callable[
                 test_fn = kwargs.get('expectation_fn', exception_test_fn)
                 return test_fn(result) if test_fn else result
             except Exception as e:
-                if error_cls:
-                    return Left(error_cls(message=str(e), name=(name or fn.__name__), code=status, klass=str(e.__class__)))
-                else:
-                    return Left(str(e))
+                error_result = Left(error_cls(message=str(e), name=(name or fn.__name__), code=status, klass=str(e.__class__))) if error_cls else Left(str(e))
+                return_fn = kwargs.get('error_result_fn', error_result_fn)
+                return return_fn(error_result) if return_fn else error_result
 
         return try_it
     return inner
