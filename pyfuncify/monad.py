@@ -52,8 +52,10 @@ def monadic_try(name: str =None,
         status: The status to be provided to the error object
         exception_test_fn: A function which takes the result.
                            When the result is Right, but the data may result in a Left.
-                           The fn must return a value wrapped in an Either
-        error_result_fn:   A function whose result will be returned in the exception flow.  It takes a built exception (either str or error_cls)
+                           The fn must return a value wrapped in an Either.
+                           This fn can also be obtained from the expectation_fn to the main fn in the first instance
+        error_result_fn:   A function whose result will be returned in the exception flow.  It takes a built exception (either str or error_cls).
+                           If it takes an injected arg (error_result_fn_arg from main fn), it should be partially applied.
 
     The @monadic_try(name="step") is really syntax sugar for:
         $ monadic_try(name="x")(fn)(args)
@@ -69,7 +71,11 @@ def monadic_try(name: str =None,
             except Exception as e:
                 error_result = Left(error_cls(message=str(e), name=(name or fn.__name__), code=status, klass=str(e.__class__))) if error_cls else Left(str(e))
                 return_fn = kwargs.get('error_result_fn', error_result_fn)
-                return return_fn(error_result) if return_fn else error_result
+                if not return_fn:
+                    return error_result
+
+                injected_arg = kwargs.get('error_result_fn_arg', None)
+                return return_fn(injected_arg, error_result) if injected_arg else return_fn(error_result)
 
         return try_it
     return inner

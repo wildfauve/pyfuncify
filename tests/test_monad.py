@@ -1,4 +1,5 @@
 import pytest
+from pymonad.tools import curry
 
 from pyfuncify import monad, error
 
@@ -11,8 +12,8 @@ def test_custom_expection_test_fn():
 
 
 def test_exception_calls_error_return_fn():
-    expected_result = {'error': 'division by zero', 'code': 500, 'step': 'exception_thrower', 'ctx': {}}
-    assert exception_thrower() == expected_result
+    expected_result = {'error_fn':{'error': 'division by zero', 'code': 500, 'step': 'exception_thrower', 'ctx': {}}}
+    assert exception_thrower(error_result_fn_arg={'error_fn': None}) == expected_result
 
 
 #
@@ -24,8 +25,10 @@ def turn_true_into_error(result):
     return result
 
 
-def wrap_error_in_dict(result):
-    return result.error().error()
+@curry(2)
+def wrap_error_in_dict(arg, result):
+    arg.update({'error_fn': result.error().error()})
+    return arg
 
 @monad.monadic_try()
 def success_function():
@@ -38,5 +41,5 @@ def success_function_with_custom_success():
 
 
 @monad.monadic_try(error_result_fn=wrap_error_in_dict, error_cls=error.PyFuncifyError, status=500)
-def exception_thrower():
+def exception_thrower(error_result_fn_arg):
     return 1/0
