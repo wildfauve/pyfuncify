@@ -9,8 +9,11 @@ class RouteMap(singleton.Singleton):
         self.routes[event] = fn
         pass
 
+    def get_route(self, route_name) -> Callable:
+        return self.routes.get(route_name, self.routes.get('no_matching_route', None))
+
 def fn_for_event(event: str) -> Callable:
-    return RouteMap().routes.get(event, RouteMap().routes.get('not_found', None))
+    return RouteMap().get_route(event)
 
 def route(event):
     """
