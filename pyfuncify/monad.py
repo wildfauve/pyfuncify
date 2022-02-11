@@ -75,7 +75,7 @@ def monadic_try(name: str =None,
                     return error_result
 
                 injected_arg = kwargs.get('error_result_fn_arg', None)
-                return return_fn(injected_arg, error_result) if injected_arg else return_fn(error_result)
+                return return_fn(injected_arg, error_result)
 
         return try_it
     return inner
