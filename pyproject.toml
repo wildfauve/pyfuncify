@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyfuncify"
-version = "0.2.20"
+version = "0.2.21"
 description = ""
 authors = ["Col Perks <wild.fauve@gmail.com>"]
 
