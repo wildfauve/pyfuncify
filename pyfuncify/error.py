@@ -10,3 +10,7 @@ class PyFuncifyError(Exception):
 
     def error(self):
         return {'error': self.message, 'code': self.code, 'step': self.name, 'ctx': self.ctx}
+
+
+class AppError(PyFuncifyError):
+    pass
