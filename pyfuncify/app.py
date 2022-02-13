@@ -6,6 +6,44 @@ from . import monad, span_tracer, logger, fn, tracer, error
 
 from . import singleton
 
+"""
+App provides a number of helpers to build a Lambda event handling pipeline.  
+
+@app.route
+---------- 
+Maintains simple routing state; mapping a function to a route "symbol.  The function will receive a Request object 
+and is expected to pass it back wrapped in an monad.MEither, with the following state options (which will be understood by the 
+app.responder fn.
++ monad.Right(Request.response), with a value JSON serialisable.
++ monad.Left(Request.response), with a value JSON serialisable.
++ monad.Left(Request), with error property containing an object which responds to 'error()' are returns a value JSON serialisable.
+
+Example: 
+@app.route('s3_bucket_name_part')
+def run_a_handler(request: RequestEvent) -> monad.MEither:
+    return handler(request=request)
+
+
+app.pipeline
+------------
+The main event pipeline handler.  Your lambda initiates the pipeline by calling this function with:
++ the aws event.
++ the aws event context
++ the env (as a str)
++ an optional request parser
++ an optional policy information point initiator
++ a handler guard condition function.
+
+It parses the event, using hints within the event to determine the app.route to be called.
++ S3 events.  The object S3StateChangeEvent is created with a collection of S3Object.  S3StateChangeEvent.kind is 
+              used to determine the app.route symbol.  The fn domain_from_bucket_name() collects the unique bucket names
+              (there should only be one), and takes the most significant part based on the default separator (DEFAULT_S3_BUCKET_SEP)
+              This then is the symbol expected on an app.route.  
+
+"""
+
+DEFAULT_S3_BUCKET_SEP = "."
+
 @dataclass
 class DataClassAbstract:
     def replace(self, key, value):
@@ -73,6 +111,9 @@ def route(event):
     return inner
 
 
+def std_noop_response(request):
+    return monad.Right(request.replace('response', monad.Right({})))
+
 
 def pipeline(event: Dict, 
              context: Dict,
@@ -136,7 +177,7 @@ def domain_from_bucket_name(objects: List[S3Object]) -> str:
     domain = {object.bucket for object in objects}
     if len(domain) > 1:
         return 'no_matching_route'
-    return domain.pop().split('.')[0]
+    return domain.pop().split(DEFAULT_S3_BUCKET_SEP)[0]
 
 
 def s3_object(record: Dict) -> S3Object:
