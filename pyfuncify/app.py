@@ -96,9 +96,13 @@ def pipeline(event: Dict,
     guard_outcome = handler_guard_fn(event)
 
     if guard_outcome.is_right():
-        result = run_pipeline(event, context, env, params_parser, pip_initiator)
+        result = run_pipeline(event=event,
+                              context=context,
+                              env=env,
+                              params_parser=params_parser,
+                              pip_initiator=pip_initiator)
     else:
-        result = monad.Left(build_value(event, context, guard_outcome.error()).value)
+        result = monad.Left(build_value(event=event, context=context, env=env, error=guard_outcome.error()).value)
     return responder(result)
 
 
@@ -173,7 +177,7 @@ def responder(request):
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.
-        body = {"statusCode": 400, 'headers': hdrs, "body":  json.dumps( request.error().error.error())}
+        body = {"statusCode": 400, 'headers': hdrs, "body":  json.dumps(request.error().error.error())}
         status = 'fail'
 
 

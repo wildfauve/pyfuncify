@@ -17,6 +17,19 @@ def it_executes_a_pipeline_from_s3_event(set_up_env,
     assert result['headers'] == {'Content-Type': 'application/json'}
     assert result['body'] == '{"hello": "there"}'
 
+
+def it_fails_on_expectations():
+    result = app.pipeline(event={},
+                          context={},
+                          env=Env().env,
+                          params_parser=noop_callable,
+                          pip_initiator=noop_callable,
+                          handler_guard_fn=failed_expectations)
+    assert result['statusCode'] == 400
+    assert result['headers'] == {'Content-Type': 'application/json'}
+    assert result['body'] == '{"error": "Env expectations failure", "code": 500, "step": "", "ctx": {}}'
+
+
 def it_executes_the_noop_path():
     result = app.pipeline(event={},
                           context={},
@@ -53,6 +66,9 @@ def handler_404(request):
 
 def noop_callable(value):
     return monad.Right(value)
+
+def failed_expectations(value):
+    return monad.Left(error.AppError(message="Env expectations failure", code=500))
 
 
 def dummy_request():
