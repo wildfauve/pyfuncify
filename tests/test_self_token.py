@@ -128,6 +128,9 @@ def test_re_get_token_when_in_expired_window(set_up_token_config_with_provider,
 
     traveller.stop()
 
+#
+# Failures
+#
 
 def test_token_grant_error(set_up_token_config_with_provider,
                            set_up_env,
@@ -138,6 +141,20 @@ def test_token_grant_error(set_up_token_config_with_provider,
     assert result.error().message == 'HTTP Error Response; POST ; https://test.host/token ; None'
     assert result.error().ctx == {'error': 'access_denied', 'error_description': 'Unauthorized'}
     assert result.error().code == 401
+
+
+def test_env_not_setup(set_up_token_config_with_provider,
+                       identity_request_mock,
+                       clear_env):
+    result = self_token.token()
+
+    assert result.is_left()
+    assert result.error().message == 'Token can not the retrieved due to a failure in env setup'
+    assert result.error().ctx == {}
+    assert result.error().code == 500
+
+    set_token_specific_env_props()
+
 
 def it_initialies_the_circuit_as_open_on_first_access_with_empty_circuit(set_up_token_config_with_provider_and_circuit,
                                                                          set_up_env,
@@ -218,7 +235,9 @@ def test_with_a_dynamo_backed_circuit_when_initialised(dynamo_mock_empty,
 
     assert( cir.value.circuit_state) == 'closed'
 
-
+#
+# Helpers
+#
 
 def looks_like_a_jwt(possible_token):
     return (fn.match('^ey', possible_token) is not None) and (len(possible_token.split(".")) == 3)
@@ -262,9 +281,19 @@ def set_up_token_config_with_provider_and_open_circuit(circuit_state_provider_in
 
 @pytest.fixture
 def set_up_env():
+    set_token_specific_env_props()
+
+def set_token_specific_env_props():
     os.environ['CLIENT_ID'] = 'id'
     os.environ['CLIENT_SECRET'] = 'secret'
     os.environ['IDENTITY_TOKEN_ENDPOINT'] = 'https://test.host/token'
+
+@pytest.fixture
+def clear_env():
+    os.environ.pop('CLIENT_ID')
+    os.environ.pop('CLIENT_SECRET')
+    os.environ.pop('IDENTITY_TOKEN_ENDPOINT')
+
 
 def success_token_callback(request, context):
     context.status_code = 200

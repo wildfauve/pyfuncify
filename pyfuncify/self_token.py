@@ -77,7 +77,7 @@ class TokenConfig(singleton.Singleton):
 def token(tracer: Tracer=None):
     _CTX['tracer'] = tracer
     if not env_set_up(TokenConfig().env):
-        return TokenEnvError(message="Token can not the retrieved due failure in env setup")
+        return monad.Left(TokenEnvError(message="Token can not the retrieved due to a failure in env setup"))
     result = get()
     if result.is_right() and (result.value.expired() or in_token_retry_window(result.value)):
         logger.log(level='info',
