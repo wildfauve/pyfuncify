@@ -1,0 +1,74 @@
+import sys
+from typing import Any, Callable, Dict, Optional
+from simple_memory_cache import GLOBAL_CACHE
+from dataclasses import dataclass, field
+from functools import reduce
+
+
+from . import monad, singleton
+
+aws_cache = GLOBAL_CACHE.MemoryCachedVar('aws_cache')
+
+@dataclass
+class AwsCtx():
+    s3: Optional[Any] = None
+    ssm: Optional[Any] = None
+    event_bridge: Optional[Any] = None
+    table: Optional[Any] = None
+
+
+
+class AwsClientConfig(singleton.Singleton):
+
+    def configure(self,
+                  aws_client_lib: Callable,
+                  region_name: str,
+                  services: Dict):
+        self.aws_client_lib = aws_client_lib
+        self.region_name = region_name
+        self.services = services
+        pass
+
+
+def aws_ctx():
+    return aws_cache.get()
+
+def invalidate_cache():
+    aws_cache.invalidate()
+    pass
+
+
+@aws_cache.on_first_access
+def initiate_ctx() -> AwsCtx:
+    ctx = reduce(client_builder, AwsClientConfig().services.items(), {})
+
+    # AwsCtx(s3=boto3.client('s3', region_name=Env.region_name),
+    #        ssm= boto3.client('ssm', region_name=Env.region_name),
+    #        event_bridge=boto3.client('events', region_name=Env.region_name),
+    #        table=boto3.resource('dynamodb', region_name=Env.region_name).Table(Env.dynamodb_table()))
+
+    return AwsCtx(**ctx)
+
+
+def client_builder(injector, service):
+    return {**injector, **getattr(sys.modules[__name__], service[0])(service[1])}
+
+def s3(args):
+    return {'s3': AwsClientConfig().aws_client_lib.client('s3', region_name=AwsClientConfig().region_name)}
+
+def ssm(args):
+    return {'ssm': AwsClientConfig().aws_client_lib.client('ssm', region_name=AwsClientConfig().region_name)}
+
+def events(args):
+    return {'event_bridge': AwsClientConfig().aws_client_lib.client('events', region_name=AwsClientConfig().region_name)}
+
+def dynamodb(args):
+    return {'table': AwsClientConfig().aws_client_lib.resource('dynamodb', region_name=AwsClientConfig().region_name)
+                                                     .Table(args['table'])}
+
+def result_status(try_result) -> str:
+    statuses = {1: 'ok'}
+    if try_result.is_right():
+        return statuses.get(try_result.lift()['ConsumedCapacity']['CapacityUnits'], 'fail')
+    else:
+        return 'fail'
