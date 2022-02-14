@@ -77,6 +77,14 @@ class S3StateChangeEvent(RequestEvent):
 
 
 @dataclass
+class ApiGatewayRequestEvent(RequestEvent):
+    method: str
+    headers: Dict
+    resource: str
+    body: str
+    query_params: Optional[dict]=None
+
+@dataclass
 class Request(DataClassAbstract):
     event: RequestEvent
     context: dict
@@ -167,8 +175,28 @@ def event_factory(event: Dict) -> RequestEvent:
     if event.get('Records', None):
         objects = s3_objects_from_event(event)
         return S3StateChangeEvent(event=event, kind=domain_from_bucket_name(objects), objects=objects)
+    if event.get('httpMethod', None):
+        return build_http_event(event)
     return NoopEvent(event=event, kind='no_matching_route')
 
+def build_http_event(event: Dict) -> ApiGatewayRequestEvent:
+    """
+    method: str
+    headers: Dict
+    resource: str
+    body: str
+    query_params: Optional[dict]=None
+    """
+    return ApiGatewayRequestEvent(kind=route_from_http_event(event['httpMethod'], event['path']),
+                                  event=event,
+                                  method=event['httpMethod'],
+                                  headers=event['headers'],
+                                  resource=event['path'],
+                                  body=event['body'],
+                                  query_params=event['queryStringParameters'])
+
+def route_from_http_event(method, path):
+    return (method, path)
 
 def s3_objects_from_event(s3_event: Dict) -> List[Dict]:
     return [s3_object(record) for record in s3_event['Records']]
