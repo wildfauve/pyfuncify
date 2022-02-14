@@ -10,11 +10,11 @@ set_env_from_parameter_store
 ----------------------------
 Reads from a Path in AWS Parameter Store (SSM) and injects each parameter as an environment variable.
 Provide the path to the variables.
-The SSM client is expected to be available via the aws_client_helpers.aws_ctx function.
+The SSM client is expected to be available via the aws_client_helpers.aws_ctx function, or optionally, it can be passed in
 """
 
-def set_env_from_parameter_store(path):
-    return monad.Right(ssm_client()) >> get_parameters(path) >> set_env >> test_set
+def set_env_from_parameter_store(path: str, ssm_client = None):
+    return monad.Right(get_ssm_client(ssm_client)) >> get_parameters(path) >> set_env >> test_set
 
 def write(key: str, param: str) -> monad.MEither:
     """
@@ -71,5 +71,7 @@ def build_parameter(key, param, _response):
 def parameter_link(key):
     return "{}{}".format(parameter_path(), key)
 
-def ssm_client():
+def get_ssm_client(ssm_client):
+    if ssm_client:
+        return ssm_client
     return aws_client_helpers.aws_ctx().ssm

@@ -4,8 +4,23 @@ from simple_memory_cache import GLOBAL_CACHE
 from dataclasses import dataclass, field
 from functools import reduce
 
-
 from . import monad, singleton
+
+"""
+Configures an AWS Client context object which initialises various AWS Clients.  The context is cached so that it can be 
+used anywhere in the app.
+
+Creating aws client instances is typically performed outside the main lambda handler, allowing the state to be cached between
+lambda invocations.
+
+First initialise the aws client config with the services you want and the boto3 lib you're using;
+> services = {'s3': {}, 'ssm': {},  'dynamodb': {'table': 'table1'}}
+> AwsClientConfig().configure(region_name="ap_southeast_2", aws_client_lib=boto3, services=services)
+
+Then get the context when required:
+>aws_ctx().ssm
+  
+"""
 
 aws_cache = GLOBAL_CACHE.MemoryCachedVar('aws_cache')
 
