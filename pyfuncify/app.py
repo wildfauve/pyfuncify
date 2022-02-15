@@ -1,6 +1,7 @@
-from typing import Optional, List, Dict, Callable, Any
+from typing import Optional, List, Dict, Tuple, Callable, Any, Union
 from dataclasses import dataclass, field
 from datetime import datetime
+from pymonad.tools import curry
 import json
 from . import monad, span_tracer, logger, fn, tracer, error
 
@@ -23,6 +24,22 @@ Example:
 def run_a_handler(request: RequestEvent) -> monad.MEither:
     return handler(request=request)
 
+Another approach is to use the 3-part Tuple form for the route template.  This is useful when wanting to pattern match on the 
+event.  For an API Gateway event, the event kind is constructed like this:
+
+                        ('API', {METHOD}, {path-template}); for example...
+
+> ('API', 'GET', '/resourceBase/resource/uuid1')
+
+Therefore a route defined as follows will match this pattern:
+> @app.route(('API', 'GET', '/resourceBase/resource/{id}'))
+
+Additionally, the Request.event property will (an instance of ApiGatewayRequestEvent) will include a 'path_params'
+property (Dict) which will extract the templated arguments; for example:
+
+> {'id': uuid1}     
+
+ 
 
 app.pipeline
 ------------
@@ -54,6 +71,7 @@ class DataClassAbstract:
 class RequestEvent(DataClassAbstract):
     event: Dict
     kind: str
+    request_function: Callable
 
 @dataclass
 class S3Object(DataClassAbstract):
@@ -80,9 +98,10 @@ class S3StateChangeEvent(RequestEvent):
 class ApiGatewayRequestEvent(RequestEvent):
     method: str
     headers: Dict
-    resource: str
+    path: str
+    path_params: Dict
     body: str
-    query_params: Optional[dict]=None
+    query_params: Optional[dict] = None
 
 @dataclass
 class Request(DataClassAbstract):
@@ -103,11 +122,61 @@ class RouteMap(singleton.Singleton):
         self.routes[event] = fn
         pass
 
-    def get_route(self, route_name) -> Callable:
-        return self.routes.get(route_name, self.routes.get('no_matching_route', None))
+    def no_route(self, return_template=False) -> Union[Callable, Tuple[str, Callable]]:
+        if return_template:
+            return 'no_matching_routes', self.routes.get('no_matching_route', None)
+        return self.routes.get('no_matching_route', None)
 
-def fn_for_event(event: str) -> Callable:
-    return RouteMap().get_route(event)
+    def get_route(self, route: Union[str, Tuple]) -> Tuple[Union[str, Tuple], Callable]:
+        if isinstance(route, str):
+            return route, self.routes.get(route, self.no_route())
+        possible_matching_routes = self.event_matches(route[0], route[1], route[2])
+        if not possible_matching_routes or len(possible_matching_routes) > 1:
+            return self.no_route(True)
+
+        return possible_matching_routes[0][0], possible_matching_routes[0][1]
+
+    def route_pattern_from_function(self, route_fn: Callable):
+        route_item = fn.find(self.route_function_predicate(route_fn), self.routes.items())
+        if route_item:
+            return route_item[0]
+        return None
+
+    @curry(3)
+    def route_function_predicate(self, route_function, route):
+        return route[1] == route_function
+
+    def event_matches(self, pos1, pos2, pos3) -> Dict[Tuple, str]:
+        return list(fn.select(self.match_predicate(pos1, pos2, pos3), self.routes.items()))
+
+    @curry(5)
+    def match_predicate(self, pos1, pos2, pos3, route_item: Tuple[Union[str, Tuple], Callable]):
+        if isinstance(route_item[0], str):
+            return None
+        event_type, event_qual, event_template = route_item[0]
+        if event_type == pos1 and event_qual == pos2 and self.template_matches(event_template, pos3):
+            return True
+        return None
+
+    def template_matches(self, template, event):
+        return self.matcher(fn.rest(template.split("/")), fn.rest(event.split("/")))
+
+    def matcher(self, template_xs: List, event_xs: List):
+        template_fst, template_rst = fn.first(template_xs), fn.rest(template_xs)
+        ev_fst, ev_rst = fn.first(event_xs), fn.rest(event_xs)
+        if not template_fst and not ev_fst:
+            return True
+        if not template_fst and ev_fst:
+            return False
+        if template_fst and not ev_fst:
+            return False
+        if not self.ismatch(template_fst, ev_fst):
+            return False
+        return self.matcher(template_rst, ev_rst)
+
+    def ismatch(self, template_token, ev_token):
+        return ("{" in template_token and "}" in template_token) or template_token == ev_token
+
 
 def route(event):
     """
@@ -173,11 +242,25 @@ def build_value(event, context, env, error=None):
 
 def event_factory(event: Dict) -> RequestEvent:
     if event.get('Records', None):
-        objects = s3_objects_from_event(event)
-        return S3StateChangeEvent(event=event, kind=domain_from_bucket_name(objects), objects=objects)
+        return build_s3_state_change_event(event)
     if event.get('httpMethod', None):
         return build_http_event(event)
-    return NoopEvent(event=event, kind='no_matching_route')
+    return build_noop_event(event)
+
+def build_noop_event(event):
+    template, route_fn = route_fn_from_kind('no_matching_route')
+    return NoopEvent(event=event,
+                     kind=template,
+                     request_function=route_fn)
+
+def build_s3_state_change_event(event: Dict) -> S3StateChangeEvent:
+    objects = s3_objects_from_event(event)
+    kind = domain_from_bucket_name(objects)
+    template, route_fn = route_fn_from_kind(kind)
+    return S3StateChangeEvent(event=event,
+                              kind=kind,
+                              request_function=route_fn,
+                              objects = objects)
 
 def build_http_event(event: Dict) -> ApiGatewayRequestEvent:
     """
@@ -187,16 +270,38 @@ def build_http_event(event: Dict) -> ApiGatewayRequestEvent:
     body: str
     query_params: Optional[dict]=None
     """
-    return ApiGatewayRequestEvent(kind=route_from_http_event(event['httpMethod'], event['path']),
+    kind = route_from_http_event(event['httpMethod'], event['path'])
+    template, route_fn = route_fn_from_kind(kind)
+    return ApiGatewayRequestEvent(kind=kind,
+                                  request_function=route_fn,
                                   event=event,
                                   method=event['httpMethod'],
                                   headers=event['headers'],
-                                  resource=event['path'],
+                                  path=event['path'],
+                                  path_params=path_template_to_params(kind[2], template[2]),
                                   body=event['body'],
                                   query_params=event['queryStringParameters'])
 
 def route_from_http_event(method, path):
-    return (method, path)
+    return ('API', method, path)
+
+def path_template_to_params(kind, template) -> Dict:
+    """
+    Remove the leading "/"
+    """
+    return params_comparer_builder(kind[1::].split("/"), template[1::].split("/"), {})
+
+def params_comparer_builder(kind_xs, template_xs, injector):
+    template_fst, template_rst = fn.first(template_xs), fn.rest(template_xs)
+    kind_fst, kind_rst = fn.first(kind_xs), fn.rest(kind_xs)
+    if not template_fst:
+        return injector
+    if "{" in template_fst:
+        return params_comparer_builder(kind_rst,
+                                       template_rst,
+                                       {**injector, **{template_fst.replace("{", "").replace("}", ""): kind_fst}})
+    return params_comparer_builder(kind_rst, template_rst, injector)
+
 
 def s3_objects_from_event(s3_event: Dict) -> List[Dict]:
     return [s3_object(record) for record in s3_event['Records']]
@@ -213,14 +318,17 @@ def s3_object(record: Dict) -> S3Object:
                     key=fn.deep_get(record, ['s3', 'object', 'key']))
 
 def route_invoker(request):
-    return route_fn_from_kind(request.event.kind)(request=request)
+    return request.event.request_function(request=request)
 
 def route_fn_from_kind(kind):
     """
     Assumes that noop_event function is defined
     """
-    return fn_for_event(event=kind)
+    return RouteMap().get_route(kind)
 
+
+def template_from_route_fn(route_fn: Callable) -> Union[str, Tuple]:
+    return RouteMap().route_pattern_from_function(route_fn)
 
 def log_start(request):
     logger.log(level='info',

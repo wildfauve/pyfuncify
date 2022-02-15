@@ -50,23 +50,32 @@ def it_executes_the_noop_path():
 # Router Functions
 #
 
-def it_creates_a_route():
-    result = app.fn_for_event("hello")(dummy_request())
+def it_creates_a_route_matched_on_string():
+    template, route_fn = app.route_fn_from_kind('hello')
+    result = route_fn(dummy_request())
 
     assert result.value.response.value == {'hello': 'there'}
 
 
-def it_routes_based_on_tuple():
-    result = app.fn_for_event(('GET', '/resource/1'))(dummy_request())
+def it_routes_based_on_tuple_and_template():
+    template, route_fn = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1/resource/uuid2'))
 
-    assert result.value.response.value == {'resource': '1'}
+    result = route_fn(dummy_request())
+
+    assert result.value.response.value == {'resource': 'uuid1'}
 
 
 def it_defaults_to_no_matching_routes_when_not_found():
-    result = app.fn_for_event("bad_route")(dummy_request())
+    template, route_fn = app.route_fn_from_kind("bad_route")
+
+    result = route_fn(dummy_request())
 
     assert result.error().error.message == 'no matching route'
-    
+
+def it_finds_the_route_pattern_by_function():
+    template, route_fn = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1'))
+
+    assert app.template_from_route_fn(route_fn) == ('API', 'GET', '/resourceBase/resource/{id1}')
 
 #
 # Request Builder Functions
@@ -85,9 +94,22 @@ def it_identifies_an_api_gateway_get_event(api_gateway_event_get):
     event = app.event_factory(api_gateway_event_get)
     
     assert isinstance(event, app.ApiGatewayRequestEvent)
-    assert event.kind == ('GET', '/resourceBase/resource/id/resource/id2')
+
+    assert event.kind == ('API', 'GET', '/resourceBase/resource/uuid1')
+    assert event.request_function
+    assert event.path_params == {'id1': 'uuid1'}
     assert event.headers
     assert event.query_params == {'param1': 'a', 'param2': 'b'}
+
+
+def it_identifies_an_api_gateway_get_event_for_a_nested_resource(api_gateway_event_get_nested_resource):
+    event = app.event_factory(api_gateway_event_get_nested_resource)
+
+    assert isinstance(event, app.ApiGatewayRequestEvent)
+
+    assert event.kind == ('API', 'GET', '/resourceBase/resource/uuid1/resource/resource-uuid2')
+    assert event.request_function
+    assert event.path_params == {'id1': 'uuid1', 'id2': 'resource-uuid2'}
 
 
 #
@@ -103,9 +125,18 @@ def hello_handler(request):
 def handler_404(request):
     return monad.Left(request.replace('error', error.AppError(message='no matching route', code=404)))
 
-@app.route(('GET', '/resource/1'))
+
+@app.route(('API', 'GET', '/resourceBase/resource/{id1}'))
 def get_resource(request):
-    return monad.Right(request.replace('response', monad.Right({'resource': '1'})))
+    if request.event:
+        pass
+    return monad.Right(request.replace('response', monad.Right({'resource': 'uuid1'})))
+
+@app.route(('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))
+def get_nested_resource(request):
+    if request.event:
+        breakpoint()
+    return monad.Right(request.replace('response', monad.Right({'resource': 'uuid1'})))
 
 
 def noop_callable(value):

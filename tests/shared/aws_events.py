@@ -13,7 +13,7 @@ def api_gateway_event_get():
     return {
         "body": "eyJ0ZXN0IjoiYm9keSJ9",
         "resource": "/{proxy+}",
-        "path": "/resourceBase/resource/id/resource/id2",
+        "path": "/resourceBase/resource/uuid1",
         "httpMethod": "GET",
         "isBase64Encoded": True,
         "queryStringParameters": {
@@ -123,7 +123,34 @@ def api_gateway_event_get():
                 "userAgent": "Custom User Agent String",
                 "user": None
             },
-            "path": "/resourceBase/resource/id/resource/id2",
+            "path": "/resourceBase/resource/uuid1",
+            "resourcePath": "/{proxy+}",
+            "httpMethod": "GET",
+            "apiId": "1234567890",
+            "protocol": "HTTP/1.1"
+        }
+    }
+
+@pytest.fixture
+def api_gateway_event_get_nested_resource():
+    return {
+        "body": "eyJ0ZXN0IjoiYm9keSJ9",
+        "resource": "/{proxy+}",
+        "path": "/resourceBase/resource/uuid1/resource/resource-uuid2",
+        "httpMethod": "GET",
+        "isBase64Encoded": True,
+        "queryStringParameters": {
+        },
+        "multiValueQueryStringParameters": {
+        },
+        "pathParameters": {
+            "proxy": "/path/to/resource"
+        },
+        "stageVariables": {
+        },
+        "headers": {},
+        "requestContext": {
+            "path": "/resourceBase/resource/uuid1/resource/resource-uuid2",
             "resourcePath": "/{proxy+}",
             "httpMethod": "GET",
             "apiId": "1234567890",
