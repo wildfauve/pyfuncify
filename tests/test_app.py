@@ -18,7 +18,7 @@ def it_executes_a_pipeline_from_s3_event(set_up_env,
                           handler_guard_fn=noop_callable)
 
     assert result['statusCode'] == 200
-    assert result['headers'] == {'Content-Type': 'application/json'}
+    assert result['headers']['Content-Type'] == 'application/json'
     assert result['body'] == '{"hello": "there"}'
 
 
@@ -45,6 +45,19 @@ def it_executes_the_noop_path():
     assert result['statusCode'] == 400
     assert result['headers'] == {'Content-Type': 'application/json'}
     assert result['body'] == '{"error": "no matching route", "code": 404, "step": "", "ctx": {}}'
+
+def it_adds_additonal_headers(set_up_env,
+                              api_gateway_event_get):
+    result = app.pipeline(event=api_gateway_event_get,
+                          context={},
+                          env=Env().env,
+                          params_parser=noop_callable,
+                          pip_initiator=noop_callable,
+                          handler_guard_fn=noop_callable)
+
+    assert result['headers'] == {'Set-Cookie': 'Custom-Cookie', 'Content-Type': 'application/json'}
+
+
 
 #
 # Router Functions
@@ -139,6 +152,7 @@ def handler_404(request):
 def get_resource(request):
     if request.event:
         pass
+    request.replace('response_headers', {'Set-Cookie': "Custom-Cookie"})
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 @app.route(('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))

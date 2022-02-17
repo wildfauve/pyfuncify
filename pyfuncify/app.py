@@ -60,6 +60,7 @@ It parses the event, using hints within the event to determine the app.route to 
 """
 
 DEFAULT_S3_BUCKET_SEP = "."
+DEFAULT_RESPONSE_HDRS = {'Content-Type': 'application/json'}
 
 @dataclass
 class DataClassAbstract:
@@ -113,6 +114,7 @@ class Request(DataClassAbstract):
     results: Optional[list] = None
     error: Optional[Any] = None
     response: Optional[dict] = None
+    response_headers: Optional[dict] = None
 
 class AppError(error.PyFuncifyBaseError):
     @classmethod
@@ -375,21 +377,24 @@ def responder(request):
       error() fn which returns an object serialisable to JSON.
     + Otherwise, Request.error() should be an Either-wrapping an object which responds to error() which is JSON serialisable
     """
-    hdrs = {
-        'Content-Type': 'application/json'
-    }
 
     if request.is_right() and request.value.response.is_right():
         # When the processing pipeline completes successfully and the response Dict is a success
-        body = {"statusCode": 200, 'headers': hdrs, "body": request.value.response.value.serialise()}
+        body = {'statusCode': 200,
+                'headers': build_headers(request.value.response_headers),
+                'body': request.value.response.value.serialise()}
         status = 'ok'
     elif request.is_right() and request.value.response.is_left():
         # When the processing pipeline completes successfully but the response Dict is a failure
-        body = {"statusCode": 200, 'headers': hdrs, "body":  request.value.response.error().serialise()}
+        body = {'statusCode': 200,
+                'headers': build_headers(request.value.response_headers),
+                'body':  request.value.response.error().serialise()}
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.
-        body = {"statusCode": 400, 'headers': hdrs, "body":  request.error().error.error().serialise()}
+        body = {'statusCode': 400,
+                'headers': build_headers(request.error().response_headers),
+                'body':  request.error().error.error().serialise()}
         status = 'fail'
 
 
@@ -397,6 +402,8 @@ def responder(request):
 
     return body
 
+def build_headers(hdrs: Dict) -> Dict:
+    return {**hdrs, **DEFAULT_RESPONSE_HDRS} if hdrs else DEFAULT_RESPONSE_HDRS
 
 def init_tracer(env: str, aws_context=None):
     aws_request_id = aws_context.aws_request_id if aws_context else None
