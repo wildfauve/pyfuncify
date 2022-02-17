@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Tuple, Callable, Any, Union
+from typing import Optional, List, Dict, Tuple, Callable, Any, Union, Protocol
 from dataclasses import dataclass, field
 from datetime import datetime
 from pymonad.tools import curry
@@ -113,6 +113,31 @@ class Request(DataClassAbstract):
     results: Optional[list] = None
     error: Optional[Any] = None
     response: Optional[dict] = None
+
+class AppError(error.PyFuncifyBaseError):
+    @classmethod
+    def dict_to_json_serialiser(cls):
+        return DictToJsonSerialiser
+
+    def error(self):
+        return type(self).dict_to_json_serialiser()(super().error())
+
+class Serialiser(Protocol):
+    def __init__(self, serialisable: Any, serialisation: Callable):
+        ...
+
+    def serialise(self):
+        ...
+
+
+class DictToJsonSerialiser(Serialiser):
+    def __init__(self, serialisable, serialisaton=None):
+        self.serialisable = serialisable
+        self.serialisation = serialisaton
+
+    def serialise(self):
+        return json.dumps(self.serialisable)
+
 
 
 class RouteMap(singleton.Singleton):
@@ -341,20 +366,30 @@ def event_kind_to_log_ctx(request: Request) -> str:
     return "{event_type}:{kind}".format(event_type=type(request.event).__name__, kind=request.event.kind)
 
 def responder(request):
+    """
+    The Request object must be returned with the following outcomes:
+    + Wrapped in an Either.
+    + 'response' property with the response to be sent wrapped in an Either.  The Request.value.result.value
+      must be able to be serialised to JSON; using the Serialiser protocol
+    + The Request can be Right, but the contained response is left.  In this case the response needs to implement an
+      error() fn which returns an object serialisable to JSON.
+    + Otherwise, Request.error() should be an Either-wrapping an object which responds to error() which is JSON serialisable
+    """
     hdrs = {
         'Content-Type': 'application/json'
     }
+
     if request.is_right() and request.value.response.is_right():
         # When the processing pipeline completes successfully and the response Dict is a success
-        body = {"statusCode": 200, 'headers': hdrs, "body": json.dumps(request.value.response.value)}
+        body = {"statusCode": 200, 'headers': hdrs, "body": request.value.response.value.serialise()}
         status = 'ok'
     elif request.is_right() and request.value.response.is_left():
-        # When the processing pipeline completes successfully but the response Dictis a failure
-        body = {"statusCode": 400, 'headers': hdrs, "body":  json.dumps(request.value.response.error())}
+        # When the processing pipeline completes successfully but the response Dict is a failure
+        body = {"statusCode": 200, 'headers': hdrs, "body":  request.value.response.error().serialise()}
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.
-        body = {"statusCode": 400, 'headers': hdrs, "body":  json.dumps(request.error().error.error())}
+        body = {"statusCode": 400, 'headers': hdrs, "body":  request.error().error.error().serialise()}
         status = 'fail'
 
 

@@ -54,7 +54,7 @@ def it_creates_a_route_matched_on_string():
     template, route_fn = app.route_fn_from_kind('hello')
     result = route_fn(dummy_request())
 
-    assert result.value.response.value == {'hello': 'there'}
+    assert result.value.response.value.serialisable == {'hello': 'there'}
 
 
 def it_routes_based_on_tuple_and_template():
@@ -62,7 +62,16 @@ def it_routes_based_on_tuple_and_template():
 
     result = route_fn(dummy_request())
 
-    assert result.value.response.value == {'resource': 'uuid1'}
+    assert result.value.response.value.serialisable == {'resource': 'uuid1'}
+
+
+def it_implements_the_serialiser_protocol_for_the_response():
+    template, route_fn = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1/resource/uuid2'))
+
+    result = route_fn(dummy_request())
+
+    assert result.value.response.value.serialisable == {'resource': 'uuid1'}
+    assert result.value.response.value.serialise() == '{"resource": "uuid1"}'
 
 
 def it_defaults_to_no_matching_routes_when_not_found():
@@ -118,32 +127,32 @@ def it_identifies_an_api_gateway_get_event_for_a_nested_resource(api_gateway_eve
 
 @app.route("hello")
 def hello_handler(request):
-    return monad.Right(request.replace('response', monad.Right({'hello': 'there'})))
+    return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'hello': 'there'}))))
 
 
 @app.route("no_matching_route")
 def handler_404(request):
-    return monad.Left(request.replace('error', error.AppError(message='no matching route', code=404)))
+    return monad.Left(request.replace('error', app.AppError(message='no matching route', code=404)))
 
 
 @app.route(('API', 'GET', '/resourceBase/resource/{id1}'))
 def get_resource(request):
     if request.event:
         pass
-    return monad.Right(request.replace('response', monad.Right({'resource': 'uuid1'})))
+    return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 @app.route(('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))
 def get_nested_resource(request):
     if request.event:
         breakpoint()
-    return monad.Right(request.replace('response', monad.Right({'resource': 'uuid1'})))
+    return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 
 def noop_callable(value):
     return monad.Right(value)
 
 def failed_expectations(value):
-    return monad.Left(error.AppError(message="Env expectations failure", code=500))
+    return monad.Left(app.AppError(message="Env expectations failure", code=500))
 
 
 def dummy_request():
