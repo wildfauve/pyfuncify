@@ -103,6 +103,9 @@ class ApiGatewayRequestEvent(RequestEvent):
     path_params: Dict
     body: str
     query_params: Optional[dict] = None
+    request_session_state: Optional[Any] = None
+    result_session_state: Optional[Any] = None
+
 
 @dataclass
 class Request(DataClassAbstract):
