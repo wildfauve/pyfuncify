@@ -20,3 +20,23 @@ def it_gets_a_property():
     session = app_web_session.WebSession().session_from_headers({'Cookie': "session1=1; session2=2"})
 
     assert session.get('session1').value() == '1'
+
+def it_doesnt_serialise_when_no_props():
+    session = app_web_session.WebSession().session_from_headers(None)
+
+    assert session.serialise_state_as_multi_header() == {}
+
+def it_sets_new_property():
+    session = app_web_session.WebSession().session_from_headers(None)
+
+    session.set('session1', '1')
+
+    assert session.get('session1').value() == '1'
+
+
+def it_updates_a_property():
+    session = app_web_session.WebSession().session_from_headers({'Cookie': "session1=1"})
+
+    session.set('session1', '2')
+
+    assert session.get('session1').value() == '2'

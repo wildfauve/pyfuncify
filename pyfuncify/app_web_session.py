@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 from http import cookies
 from pymonad.tools import curry
 
@@ -6,9 +6,21 @@ from . import fn
 
 class SessionProperty:
 
-    def __init__(self, name: str, value: cookies.Morsel):
+    def __init__(self, name: str, value: Union[cookies.Morsel, str]):
         self.name = name
-        self.morsel = value
+        self.morsel = self.coerse_value(name, value)
+
+    def coerse_value(self, name, val):
+        if isinstance(val, cookies.Morsel):
+            return val
+        morsel = cookies.Morsel()
+        morsel.set(name, val, val)
+        return morsel
+
+    def update(self, val):
+        self.morsel.set(self.name, val, val)
+        pass
+
 
     def serialise(self) -> str:
         return self.morsel.OutputString()
@@ -22,10 +34,16 @@ class SessionProperty:
 
 class WebSession():
 
+    def __init__(self):
+        self.properties = []
+
     def session_from_headers(self, headers: Dict):
+        if not headers:
+            return self
+
         hdrs = headers.get('Cookie', None)
+
         if not hdrs:
-            self.session_state = None
             return self
         cookie = cookies.SimpleCookie()
         cookie.load(hdrs)
@@ -33,10 +51,22 @@ class WebSession():
         return self
 
     def serialise_state_as_multi_header(self) -> Dict[str, List]:
+        if not self.properties:
+            return {}
         return {'Set-Cookie': [prop.serialise() for prop in self.properties]}
 
     def get(self, name) -> SessionProperty:
+        if not self.properties:
+            return None
         return fn.find(self.prop_name_predicate(name), self.properties)
+
+    def set(self, name, value):
+        prop = self.get(name)
+        if prop:
+            prop.update(value)
+        else:
+            self.properties.append(SessionProperty(name, value))
+        return self
 
     @curry(3)
     def prop_name_predicate(self, name, prop):
