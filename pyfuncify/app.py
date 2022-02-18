@@ -70,6 +70,7 @@ DEFAULT_S3_BUCKET_SEP = "."
 DEFAULT_RESPONSE_HDRS = {'Content-Type': 'application/json'}
 
 Request = app_value.Request
+RequestEvent = app_value.RequestEvent
 ApiGatewayRequestEvent = app_value.ApiGatewayRequestEvent
 S3StateChangeEvent = app_value.S3StateChangeEvent
 S3Object = app_value.S3Object
