@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pymonad.tools import curry
 import json
+import http.cookies as cookielib
 from . import monad, span_tracer, logger, fn, tracer, error
 
 from . import singleton
@@ -74,6 +75,9 @@ class RequestEvent(DataClassAbstract):
     kind: str
     request_function: Callable
 
+    def returnable_session_state(self):
+        return False
+
 @dataclass
 class S3Object(DataClassAbstract):
     bucket: str
@@ -105,6 +109,10 @@ class ApiGatewayRequestEvent(RequestEvent):
     query_params: Optional[dict] = None
     request_session_state: Optional[Any] = None
     result_session_state: Optional[Any] = None
+
+    def returnable_session_state(self):
+        return True
+
 
 
 @dataclass
@@ -310,7 +318,17 @@ def build_http_event(event: Dict) -> ApiGatewayRequestEvent:
                                   path=event['path'],
                                   path_params=path_template_to_params(kind[2], template[2]),
                                   body=event['body'],
-                                  query_params=event['queryStringParameters'])
+                                  query_params=event['queryStringParameters'],
+                                  request_session_state=session_from_headers(event['headers']),
+                                  result_session_state=None)
+
+def session_from_headers(headers: Dict):
+    hdrs = headers.get('Cookie', None)
+    if not hdrs:
+        return None
+    cookie = cookielib.SimpleCookie()
+    cookie.load(hdrs)
+    return cookie
 
 def route_from_http_event(method, path):
     return ('API', method, path)
@@ -360,6 +378,7 @@ def route_fn_from_kind(kind):
 def template_from_route_fn(route_fn: Callable) -> Union[str, Tuple]:
     return RouteMap().route_pattern_from_function(route_fn)
 
+
 def log_start(request):
     logger.log(level='info',
                msg='Start Handler',
@@ -381,23 +400,23 @@ def responder(request):
     + Otherwise, Request.error() should be an Either-wrapping an object which responds to error() which is JSON serialisable
     """
 
+    body = {'headers': build_headers(request.lift().response_headers),
+            'multiValueHeaders': build_multi_headers(request.lift().event)}
+
     if request.is_right() and request.value.response.is_right():
         # When the processing pipeline completes successfully and the response Dict is a success
-        body = {'statusCode': 200,
-                'headers': build_headers(request.value.response_headers),
-                'body': request.value.response.value.serialise()}
+        body['statusCode']= 200
+        body['body'] = request.value.response.value.serialise()
         status = 'ok'
     elif request.is_right() and request.value.response.is_left():
         # When the processing pipeline completes successfully but the response Dict is a failure
-        body = {'statusCode': 200,
-                'headers': build_headers(request.value.response_headers),
-                'body':  request.value.response.error().serialise()}
+        body['statusCode'] = 200
+        body['body'] = request.value.response.error().serialise()
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.
-        body = {'statusCode': 400,
-                'headers': build_headers(request.error().response_headers),
-                'body':  request.error().error.error().serialise()}
+        body['statusCode'] = 400
+        body['body'] = request.error().error.error().serialise()
         status = 'fail'
 
 
@@ -405,8 +424,16 @@ def responder(request):
 
     return body
 
-def build_headers(hdrs: Dict) -> Dict:
+def build_headers(hdrs: Dict)-> Dict:
     return {**hdrs, **DEFAULT_RESPONSE_HDRS} if hdrs else DEFAULT_RESPONSE_HDRS
+
+def build_multi_headers(event: RequestEvent) -> Dict:
+    """
+    Only attempts to set headers for 'Set-Cookie' and mostly for session state
+    """
+    if event.returnable_session_state():
+        return {'Set-Cookie': [ss[1].OutputString() for ss in event.result_session_state.items()]}
+    return {}
 
 def init_tracer(env: str, aws_context=None):
     aws_request_id = aws_context.aws_request_id if aws_context else None

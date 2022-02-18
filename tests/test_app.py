@@ -42,11 +42,12 @@ def it_executes_the_noop_path():
                           pip_initiator=noop_callable,
                           handler_guard_fn=noop_callable)
 
+
     assert result['statusCode'] == 400
     assert result['headers'] == {'Content-Type': 'application/json'}
     assert result['body'] == '{"error": "no matching route", "code": 404, "step": "", "ctx": {}}'
 
-def it_adds_additonal_headers(set_up_env,
+def it_adds_the_session_as_a_cookie(set_up_env,
                               api_gateway_event_get):
     result = app.pipeline(event=api_gateway_event_get,
                           context={},
@@ -55,7 +56,7 @@ def it_adds_additonal_headers(set_up_env,
                           pip_initiator=noop_callable,
                           handler_guard_fn=noop_callable)
 
-    assert result['headers'] == {'Set-Cookie': 'Custom-Cookie', 'Content-Type': 'application/json'}
+    assert result['multiValueHeaders'] == {'Set-Cookie': ['session=session_uuid', 'session1=session1_uuid']}
 
 
 
@@ -152,7 +153,7 @@ def handler_404(request):
 def get_resource(request):
     if request.event:
         pass
-    request.replace('response_headers', {'Set-Cookie': "Custom-Cookie"})
+    request.event.result_session_state = request.event.request_session_state
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 @app.route(('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))

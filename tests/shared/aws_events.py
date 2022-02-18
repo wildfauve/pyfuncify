@@ -38,6 +38,7 @@ def api_gateway_event_get():
             "CloudFront-Is-SmartTV-Viewer": "false",
             "CloudFront-Is-Tablet-Viewer": "false",
             "CloudFront-Viewer-Country": "US",
+            "Cookie": "session=session_uuid; session1=session1_uuid",
             "Host": "1234567890.execute-api.us-east-1.amazonaws.com",
             "Upgrade-Insecure-Requests": "1",
             "User-Agent": "Custom User Agent String",
