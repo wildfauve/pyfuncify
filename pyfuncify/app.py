@@ -1,28 +1,34 @@
 from typing import Optional, List, Dict, Tuple, Callable, Any, Union, Protocol
-from dataclasses import dataclass, field
-from datetime import datetime
+
 from pymonad.tools import curry
 import json
-import http.cookies as cookielib
-from . import monad, span_tracer, logger, fn, tracer, error
-
-from . import singleton
+from . import (monad,
+               span_tracer,
+               logger,
+               fn,
+               tracer,
+               error,
+               app_value,
+               app_route,
+               app_web_session,
+               singleton,
+               app_serialisers)
 
 """
 App provides a number of helpers to build a Lambda event handling pipeline.  
 
 @app.route
 ---------- 
-Maintains simple routing state; mapping a function to a route "symbol.  The function will receive a Request object 
+Maintains simple routing state; mapping a function to a route "symbol.  The function will receive a app_value.Request object 
 and is expected to pass it back wrapped in an monad.MEither, with the following state options (which will be understood by the 
 app.responder fn.
-+ monad.Right(Request.response), with a value JSON serialisable.
-+ monad.Left(Request.response), with a value JSON serialisable.
-+ monad.Left(Request), with error property containing an object which responds to 'error()' are returns a value JSON serialisable.
++ monad.Right(app_value.Request.response), with a value JSON serialisable.
++ monad.Left(app_value.Request.response), with a value JSON serialisable.
++ monad.Left(app_value.Request), with error property containing an object which responds to 'error()' are returns a value JSON serialisable.
 
 Example: 
 @app.route('s3_bucket_name_part')
-def run_a_handler(request: RequestEvent) -> monad.MEither:
+def run_a_handler(request: app_value.RequestEvent) -> monad.MEither:
     return handler(request=request)
 
 Another approach is to use the 3-part Tuple form for the route template.  This is useful when wanting to pattern match on the 
@@ -35,7 +41,7 @@ event.  For an API Gateway event, the event kind is constructed like this:
 Therefore a route defined as follows will match this pattern:
 > @app.route(('API', 'GET', '/resourceBase/resource/{id}'))
 
-Additionally, the Request.event property will (an instance of ApiGatewayRequestEvent) will include a 'path_params'
+Additionally, the app_value.Request.event property will (an instance of ApiGatewayapp_value.RequestEvent) will include a 'path_params'
 property (Dict) which will extract the templated arguments; for example:
 
 > {'id': uuid1}     
@@ -63,171 +69,15 @@ It parses the event, using hints within the event to determine the app.route to 
 DEFAULT_S3_BUCKET_SEP = "."
 DEFAULT_RESPONSE_HDRS = {'Content-Type': 'application/json'}
 
-@dataclass
-class DataClassAbstract:
-    def replace(self, key, value):
-        setattr(self, key, value)
-        return self
+Request = app_value.Request
+ApiGatewayRequestEvent = app_value.ApiGatewayRequestEvent
+S3StateChangeEvent = app_value.S3StateChangeEvent
+S3Object = app_value.S3Object
+DictToJsonSerialiser = app_serialisers.DictToJsonSerialiser
+AppError = app_value.AppError
 
-@dataclass
-class RequestEvent(DataClassAbstract):
-    event: Dict
-    kind: str
-    request_function: Callable
-
-    def returnable_session_state(self):
-        return False
-
-@dataclass
-class S3Object(DataClassAbstract):
-    bucket: str
-    key: str
-    event_time: Optional[datetime] = None
-    object: Optional[list] = None
-    meta: Optional[Dict] = None
-
-    def s3_event_path(self):
-        return "{bucket}/{key}".format(bucket=self.bucket, key=self.key)
-
-
-@dataclass
-class NoopEvent(RequestEvent):
-    pass
-
-@dataclass
-class S3StateChangeEvent(RequestEvent):
-    objects: List[S3Object]
-
-
-@dataclass
-class ApiGatewayRequestEvent(RequestEvent):
-    method: str
-    headers: Dict
-    path: str
-    path_params: Dict
-    body: str
-    query_params: Optional[dict] = None
-    request_session_state: Optional[Any] = None
-    result_session_state: Optional[Any] = None
-
-    def returnable_session_state(self):
-        return True
-
-
-
-@dataclass
-class Request(DataClassAbstract):
-    event: RequestEvent
-    context: dict
-    tracer: tracer.Tracer
-    request_handler: Optional[Callable] = None
-    pip: Optional[dict] = None
-    results: Optional[list] = None
-    error: Optional[Any] = None
-    response: Optional[dict] = None
-    response_headers: Optional[dict] = None
-
-class AppError(error.PyFuncifyBaseError):
-    @classmethod
-    def dict_to_json_serialiser(cls):
-        return DictToJsonSerialiser
-
-    def error(self):
-        return type(self).dict_to_json_serialiser()(super().error())
-
-class Serialiser(Protocol):
-    def __init__(self, serialisable: Any, serialisation: Callable):
-        ...
-
-    def serialise(self):
-        ...
-
-
-class DictToJsonSerialiser(Serialiser):
-    def __init__(self, serialisable, serialisaton=None):
-        self.serialisable = serialisable
-        self.serialisation = serialisaton
-
-    def serialise(self):
-        return json.dumps(self.serialisable)
-
-
-
-class RouteMap(singleton.Singleton):
-    routes = {}
-
-    def add_route(self, event: str, fn: Callable):
-        self.routes[event] = fn
-        pass
-
-    def no_route(self, return_template=False) -> Union[Callable, Tuple[str, Callable]]:
-        if return_template:
-            return 'no_matching_routes', self.routes.get('no_matching_route', None)
-        return self.routes.get('no_matching_route', None)
-
-    def get_route(self, route: Union[str, Tuple]) -> Tuple[Union[str, Tuple], Callable]:
-        if isinstance(route, str):
-            return route, self.routes.get(route, self.no_route())
-        possible_matching_routes = self.event_matches(route[0], route[1], route[2])
-        if not possible_matching_routes or len(possible_matching_routes) > 1:
-            return self.no_route(True)
-
-        return possible_matching_routes[0][0], possible_matching_routes[0][1]
-
-    def route_pattern_from_function(self, route_fn: Callable):
-        route_item = fn.find(self.route_function_predicate(route_fn), self.routes.items())
-        if route_item:
-            return route_item[0]
-        return None
-
-    @curry(3)
-    def route_function_predicate(self, route_function, route):
-        return route[1] == route_function
-
-    def event_matches(self, pos1, pos2, pos3) -> Dict[Tuple, str]:
-        return list(fn.select(self.match_predicate(pos1, pos2, pos3), self.routes.items()))
-
-    @curry(5)
-    def match_predicate(self, pos1, pos2, pos3, route_item: Tuple[Union[str, Tuple], Callable]):
-        if isinstance(route_item[0], str):
-            return None
-        event_type, event_qual, event_template = route_item[0]
-        if event_type == pos1 and event_qual == pos2 and self.template_matches(event_template, pos3):
-            return True
-        return None
-
-    def template_matches(self, template, event):
-        return self.matcher(fn.rest(template.split("/")), fn.rest(event.split("/")))
-
-    def matcher(self, template_xs: List, event_xs: List):
-        template_fst, template_rst = fn.first(template_xs), fn.rest(template_xs)
-        ev_fst, ev_rst = fn.first(event_xs), fn.rest(event_xs)
-        if not template_fst and not ev_fst:
-            return True
-        if not template_fst and ev_fst:
-            return False
-        if template_fst and not ev_fst:
-            return False
-        if not self.ismatch(template_fst, ev_fst):
-            return False
-        return self.matcher(template_rst, ev_rst)
-
-    def ismatch(self, template_token, ev_token):
-        return ("{" in template_token and "}" in template_token) or template_token == ev_token
-
-
-def route(event):
-    """
-    Route Mapper
-
-    """
-    def inner(fn):
-        RouteMap().add_route(event=event, fn=fn)
-    return inner
-
-
-def std_noop_response(request):
-    return monad.Right(request.replace('response', monad.Right({})))
+def route(route_pattern):
+    return app_route.route(route_pattern)
 
 
 def pipeline(event: Dict, 
@@ -268,39 +118,39 @@ def run_pipeline(event: Dict, context: Dict, env: Any, params_parser: Callable, 
 
 def build_value(event, context, env, error=None):
     """
-    Initialises the Request object to be passed to the pipeline
+    Initialises the app_value.Request object to be passed to the pipeline
     """
-    req = Request(event=event_factory(event),
-                  context=context,
-                  tracer=init_tracer(env=env, aws_context=context),
-                  pip=None,
-                  response=None,
-                  error=error)
+    req = app_value.Request(event=event_factory(event),
+                            context=context,
+                            tracer=init_tracer(env=env, aws_context=context),
+                            pip=None,
+                            response=None,
+                            error=error)
     return monad.Right(req)
 
-def event_factory(event: Dict) -> RequestEvent:
+def event_factory(event: Dict) -> app_value.RequestEvent:
     if event.get('Records', None):
         return build_s3_state_change_event(event)
     if event.get('httpMethod', None):
         return build_http_event(event)
     return build_noop_event(event)
 
-def build_noop_event(event):
+def build_noop_event(event: app_value.RequestEvent) -> app_value.RequestEvent:
     template, route_fn = route_fn_from_kind('no_matching_route')
-    return NoopEvent(event=event,
-                     kind=template,
-                     request_function=route_fn)
+    return app_value.NoopEvent(event=event,
+                               kind=template,
+                               request_function=route_fn)
 
-def build_s3_state_change_event(event: Dict) -> S3StateChangeEvent:
+def build_s3_state_change_event(event: Dict) -> app_value.S3StateChangeEvent:
     objects = s3_objects_from_event(event)
     kind = domain_from_bucket_name(objects)
     template, route_fn = route_fn_from_kind(kind)
-    return S3StateChangeEvent(event=event,
-                              kind=kind,
-                              request_function=route_fn,
-                              objects = objects)
+    return app_value.S3StateChangeEvent(event=event,
+                                        kind=kind,
+                                        request_function=route_fn,
+                                        objects = objects)
 
-def build_http_event(event: Dict) -> ApiGatewayRequestEvent:
+def build_http_event(event: Dict) -> app_value.ApiGatewayRequestEvent:
     """
     method: str
     headers: Dict
@@ -310,25 +160,16 @@ def build_http_event(event: Dict) -> ApiGatewayRequestEvent:
     """
     kind = route_from_http_event(event['httpMethod'], event['path'])
     template, route_fn = route_fn_from_kind(kind)
-    return ApiGatewayRequestEvent(kind=kind,
-                                  request_function=route_fn,
-                                  event=event,
-                                  method=event['httpMethod'],
-                                  headers=event['headers'],
-                                  path=event['path'],
-                                  path_params=path_template_to_params(kind[2], template[2]),
-                                  body=event['body'],
-                                  query_params=event['queryStringParameters'],
-                                  request_session_state=session_from_headers(event['headers']),
-                                  result_session_state=None)
-
-def session_from_headers(headers: Dict):
-    hdrs = headers.get('Cookie', None)
-    if not hdrs:
-        return None
-    cookie = cookielib.SimpleCookie()
-    cookie.load(hdrs)
-    return cookie
+    return app_value.ApiGatewayRequestEvent(kind=kind,
+                                            request_function=route_fn,
+                                            event=event,
+                                            method=event['httpMethod'],
+                                            headers=event['headers'],
+                                            path=event['path'],
+                                            path_params=path_template_to_params(kind[2], template[2]),
+                                            body=event['body'],
+                                            query_params=event['queryStringParameters'],
+                                            web_session=app_web_session.WebSession().session_from_headers(event['headers']))
 
 def route_from_http_event(method, path):
     return ('API', method, path)
@@ -354,16 +195,16 @@ def params_comparer_builder(kind_xs, template_xs, injector):
 def s3_objects_from_event(s3_event: Dict) -> List[Dict]:
     return [s3_object(record) for record in s3_event['Records']]
 
-def domain_from_bucket_name(objects: List[S3Object]) -> str:
+def domain_from_bucket_name(objects: List[app_value.S3Object]) -> str:
     domain = {object.bucket for object in objects}
     if len(domain) > 1:
         return 'no_matching_route'
     return domain.pop().split(DEFAULT_S3_BUCKET_SEP)[0]
 
 
-def s3_object(record: Dict) -> S3Object:
-    return S3Object(bucket=fn.deep_get(record, ['s3', 'bucket', 'name']),
-                    key=fn.deep_get(record, ['s3', 'object', 'key']))
+def s3_object(record: Dict) -> app_value.S3Object:
+    return app_value.S3Object(bucket=fn.deep_get(record, ['s3', 'bucket', 'name']),
+                              key=fn.deep_get(record, ['s3', 'object', 'key']))
 
 def route_invoker(request):
     return request.event.request_function(request=request)
@@ -372,11 +213,11 @@ def route_fn_from_kind(kind):
     """
     Assumes that noop_event function is defined
     """
-    return RouteMap().get_route(kind)
+    return app_route.RouteMap().get_route(kind)
 
 
 def template_from_route_fn(route_fn: Callable) -> Union[str, Tuple]:
-    return RouteMap().route_pattern_from_function(route_fn)
+    return app_route.RouteMap().route_pattern_from_function(route_fn)
 
 
 def log_start(request):
@@ -386,18 +227,18 @@ def log_start(request):
                ctx={'event': event_kind_to_log_ctx(request)})
     return monad.Right(request)
 
-def event_kind_to_log_ctx(request: Request) -> str:
+def event_kind_to_log_ctx(request: app_value.Request) -> str:
     return "{event_type}:{kind}".format(event_type=type(request.event).__name__, kind=request.event.kind)
 
 def responder(request):
     """
-    The Request object must be returned with the following outcomes:
+    The app_value.Request object must be returned with the following outcomes:
     + Wrapped in an Either.
-    + 'response' property with the response to be sent wrapped in an Either.  The Request.value.result.value
+    + 'response' property with the response to be sent wrapped in an Either.  The app_value.Request.value.result.value
       must be able to be serialised to JSON; using the Serialiser protocol
-    + The Request can be Right, but the contained response is left.  In this case the response needs to implement an
+    + The app_value.Request can be Right, but the contained response is left.  In this case the response needs to implement an
       error() fn which returns an object serialisable to JSON.
-    + Otherwise, Request.error() should be an Either-wrapping an object which responds to error() which is JSON serialisable
+    + Otherwise, app_value.Request.error() should be an Either-wrapping an object which responds to error() which is JSON serialisable
     """
 
     body = {'headers': build_headers(request.lift().response_headers),
@@ -427,12 +268,12 @@ def responder(request):
 def build_headers(hdrs: Dict)-> Dict:
     return {**hdrs, **DEFAULT_RESPONSE_HDRS} if hdrs else DEFAULT_RESPONSE_HDRS
 
-def build_multi_headers(event: RequestEvent) -> Dict:
+def build_multi_headers(event: app_value.RequestEvent) -> Dict:
     """
     Only attempts to set headers for 'Set-Cookie' and mostly for session state
     """
-    if event.returnable_session_state():
-        return {'Set-Cookie': [ss[1].OutputString() for ss in event.result_session_state.items()]}
+    if event.returnable_session_state() and event.web_session:
+        return event.web_session.serialise_state_as_multi_header()
     return {}
 
 def init_tracer(env: str, aws_context=None):

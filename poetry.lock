@@ -174,14 +174,6 @@ cryptography = ">=2.3"
 deprecated = "*"
 
 [[package]]
-name = "lambdacookie"
-version = "0.1.0"
-description = "Provides functions to aid in outputting multiple cookies from AWS Lambda functions through API Gateway."
-category = "main"
-optional = false
-python-versions = "*"
-
-[[package]]
 name = "markupsafe"
 version = "2.0.1"
 description = "Safely add untrusted strings to HTML/XML markup."
@@ -545,7 +537,7 @@ python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "7f084739add5f02aefd87d1a3f4848b831a4d0c479c9e57a8dc5bc62da9eb232"
+content-hash = "804e8c28696ef90082b280047303df087753c2cff0af0b8aaff9ade5fe5ad7e2"
 
 [metadata.files]
 atomicwrites = [
@@ -662,10 +654,6 @@ jmespath = [
 jwcrypto = [
     {file = "jwcrypto-1.0-py2.py3-none-any.whl", hash = "sha256:db93a656d9a7a35dda5a68deb5c9f301f4e60507d8aef1559e0637b9ac497137"},
     {file = "jwcrypto-1.0.tar.gz", hash = "sha256:f88816eb0a41b8f006af978ced5f171f33782525006cdb055b536a40f4d46ac9"},
-]
-lambdacookie = [
-    {file = "lambdacookie-0.1.0-py2.py3-none-any.whl", hash = "sha256:653fc8cf6336868f056c9897e0b7be7b5a95e8b5e5ae7979c758b315b7743e10"},
-    {file = "lambdacookie-0.1.0.tar.gz", hash = "sha256:70a5b76687159d571b0347806a8e960399a1fa23b327e44c361e72abd704358c"},
 ]
 markupsafe = [
     {file = "MarkupSafe-2.0.1-cp310-cp310-macosx_10_9_universal2.whl", hash = "sha256:d8446c54dc28c01e5a2dbac5a25f071f6653e6e40f3a8818e8b45d790fe6ef53"},

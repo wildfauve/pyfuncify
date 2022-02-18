@@ -153,7 +153,6 @@ def handler_404(request):
 def get_resource(request):
     if request.event:
         pass
-    request.event.result_session_state = request.event.request_session_state
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 @app.route(('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))

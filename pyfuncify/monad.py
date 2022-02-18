@@ -1,11 +1,12 @@
 from pymonad.operators.either import Either
-from typing import Any, TypeVar, Callable, Union, Any
+from typing import Any, TypeVar, Callable, Union, Any, Generic
 
 from .logger import logger
 
-M = TypeVar('M') # pylint: disable=invalid-name
-S = TypeVar('S') # pylint: disable=invalid-name
-T = TypeVar('T') # pylint: disable=invalid-name
+T = TypeVar('T')
+
+class EitherMonad(Generic[T]):
+    pass
 
 class MEither(Either):
     def __or__(self, fns):
@@ -23,24 +24,24 @@ class MEither(Either):
         return self.monoid[0]
 
 
-def Left(value: M) -> Either[M, Any]: # pylint: disable=invalid-name
+def Left(value: Either) -> Either[T, T]: # pylint: disable=invalid-name
     """ Creates a value of the first possible type in the Either monad. """
     return MEither(None, (value, False))
 
 
-def Right(value: T) -> Either[Any, T]: # pylint: disable=invalid-name
+def Right(value: Either) -> Either[T, T]: # pylint: disable=invalid-name
     """ Creates a value of the second possible type in the Either monad. """
     return MEither(value, (None, True))
 
-def maybe_value_ok(value: T) -> bool:
+def maybe_value_ok(value: Either) -> bool:
     return value.is_right()
 
-def maybe_value_fail(value: T) -> bool:
+def maybe_value_fail(value: Either) -> bool:
     return value.is_left()
 
 def monadic_try(name: str =None,
                 status: int =None,
-                exception_test_fn: Callable[[MEither], MEither]=None,
+                exception_test_fn: Callable[[Either], Either]=None,
                 error_cls: Any=None,
                 error_result_fn: Callable=None):
     """
@@ -80,5 +81,5 @@ def monadic_try(name: str =None,
         return try_it
     return inner
 
-def any_error(try_result: MEither) -> Union[str, None]:
+def any_error(try_result: Either) -> Union[str, None]:
     return try_result.either(lambda res: str(res.error()), lambda res: None)
