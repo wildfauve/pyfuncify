@@ -73,7 +73,10 @@ Request = app_value.Request
 ApiGatewayRequestEvent = app_value.ApiGatewayRequestEvent
 S3StateChangeEvent = app_value.S3StateChangeEvent
 S3Object = app_value.S3Object
+
+Serialise = app_serialisers.Serialiser
 DictToJsonSerialiser = app_serialisers.DictToJsonSerialiser
+
 AppError = app_value.AppError
 
 def route(route_pattern):
