@@ -35,6 +35,18 @@ def rsa_private_key():
     """
     return rsa.generate_private_key(backend=default_backend(),public_exponent=65537,key_size=2048)
 
+@pytest.fixture
+def rsa_key_pair(kid="1"):
+    """
+    Args:
+        kid: a unique id for the key
+
+    Returns:
+        JWK pub/priv key pair with a KID
+    """
+    return jwk.JWK.generate(kty='RSA', size=2048, kid=kid)
+
+
 def generate_signed_jwt(rsa_private_key):
     """
     Generates an RSA signed JWT is serialised form
@@ -51,6 +63,22 @@ def generate_expired_signed_jwt():
 @pytest.fixture
 def generate_valid_signed_jwt():
     return generate_signed_jwt(rsa_private_key())
+
+@pytest.fixture
+def jwk_key_set(rsa_key_pair):
+    """
+    Takes an RSA key pair and returns a JWKS containing the public key
+    """
+    priv, pub = jwk_rsa_keys(rsa_key_pair)
+    return dict(keys=[json.loads(pub)])
+
+
+def jwk_rsa_keys(pair) -> Tuple:
+    """
+    Returns a tuple of the priv and pub keys as a JSON encoded JWK
+    """
+    return pair.export_private(), pair.export_public()
+
 
 def jwt_claims_expired():
     claims = jwt_claims()

@@ -80,8 +80,8 @@ DictToJsonSerialiser = app_serialisers.DictToJsonSerialiser
 
 AppError = app_value.AppError
 
-def route(route_pattern):
-    return app_route.route(route_pattern)
+def route(pattern, opts=None):
+    return app_route.route(pattern, opts)
 
 
 def pipeline(event: Dict, 
@@ -140,7 +140,7 @@ def event_factory(event: Dict) -> app_value.RequestEvent:
     return build_noop_event(event)
 
 def build_noop_event(event: app_value.RequestEvent) -> app_value.RequestEvent:
-    template, route_fn = route_fn_from_kind('no_matching_route')
+    template, route_fn, opts = route_fn_from_kind('no_matching_route')
     return app_value.NoopEvent(event=event,
                                kind=template,
                                request_function=route_fn)
@@ -148,7 +148,7 @@ def build_noop_event(event: app_value.RequestEvent) -> app_value.RequestEvent:
 def build_s3_state_change_event(event: Dict) -> app_value.S3StateChangeEvent:
     objects = s3_objects_from_event(event)
     kind = domain_from_bucket_name(objects)
-    template, route_fn = route_fn_from_kind(kind)
+    template, route_fn, _opts = route_fn_from_kind(kind)
     return app_value.S3StateChangeEvent(event=event,
                                         kind=kind,
                                         request_function=route_fn,
@@ -163,7 +163,8 @@ def build_http_event(event: Dict) -> app_value.ApiGatewayRequestEvent:
     query_params: Optional[dict]=None
     """
     kind = route_from_http_event(event['httpMethod'], event['path'])
-    template, route_fn = route_fn_from_kind(kind)
+    template, route_fn, opts = route_fn_from_kind(kind)
+    body = opts['body_parser'](event['body']) if opts and opts['body_parser'] else event['body']
     return app_value.ApiGatewayRequestEvent(kind=kind,
                                             request_function=route_fn,
                                             event=event,
@@ -171,7 +172,7 @@ def build_http_event(event: Dict) -> app_value.ApiGatewayRequestEvent:
                                             headers=event['headers'],
                                             path=event['path'],
                                             path_params=path_template_to_params(kind[2], template[2]),
-                                            body=event['body'],
+                                            body=body,
                                             query_params=event['queryStringParameters'],
                                             web_session=app_web_session.WebSession().session_from_headers(event['headers']))
 

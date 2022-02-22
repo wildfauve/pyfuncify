@@ -1,4 +1,5 @@
 import pytest
+import json
 
 @pytest.fixture
 def s3_event_hello():
@@ -154,6 +155,33 @@ def api_gateway_event_get_nested_resource():
             "path": "/resourceBase/resource/uuid1/resource/resource-uuid2",
             "resourcePath": "/{proxy+}",
             "httpMethod": "GET",
+            "apiId": "1234567890",
+            "protocol": "HTTP/1.1"
+        }
+    }
+
+@pytest.fixture
+def api_gateway_event_post_with_json_body():
+    return {
+        "body": json.dumps({'test': 1}),
+        "resource": "/{proxy+}",
+        "path": "/resourceBase/resource/uuid1",
+        "httpMethod": "POST",
+        "isBase64Encoded": True,
+        "queryStringParameters": {
+        },
+        "multiValueQueryStringParameters": {
+        },
+        "pathParameters": {
+            "proxy": "/path/to/resource"
+        },
+        "stageVariables": {
+        },
+        "headers": {},
+        "requestContext": {
+            "path": "/resourceBase/resource/uuid1/resource/resource-uuid2",
+            "resourcePath": "/{proxy+}",
+            "httpMethod": "POST",
             "apiId": "1234567890",
             "protocol": "HTTP/1.1"
         }

@@ -6,23 +6,25 @@ from . import singleton, fn
 class RouteMap(singleton.Singleton):
     routes = {}
 
-    def add_route(self, route_pattern: str, fn: Callable):
-        self.routes[route_pattern] = fn
+    def add_route(self, pattern: Union[str, Tuple[str,str,str]], fn: Callable, opts: Dict):
+        self.routes[pattern] = (fn, opts)
         pass
 
     def no_route(self, return_template=False) -> Union[Callable, Tuple[str, Callable]]:
         if return_template:
-            return 'no_matching_routes', self.routes.get('no_matching_route', None)
+            return 'no_matching_routes', self.routes.get('no_matching_route', None), None
         return self.routes.get('no_matching_route', None)
 
     def get_route(self, route: Union[str, Tuple]) -> Tuple[Union[str, Tuple], Callable]:
         if isinstance(route, str):
-            return route, self.routes.get(route, self.no_route())
+            match = self.routes.get(route, self.no_route())
+            return route, match[0], match[1]
         possible_matching_routes = self.event_matches(route[0], route[1], route[2])
         if not possible_matching_routes or len(possible_matching_routes) > 1:
             return self.no_route(True)
 
-        return possible_matching_routes[0][0], possible_matching_routes[0][1]
+        # return the route_pattern, route_fn, and route_opts
+        return possible_matching_routes[0][0], possible_matching_routes[0][1][0], possible_matching_routes[0][1][1],
 
     def route_pattern_from_function(self, route_fn: Callable):
         route_item = fn.find(self.route_function_predicate(route_fn), self.routes.items())
@@ -31,8 +33,8 @@ class RouteMap(singleton.Singleton):
         return None
 
     @curry(3)
-    def route_function_predicate(self, route_function, route):
-        return route[1] == route_function
+    def route_function_predicate(self, route_fn, route):
+        return route[1][0] == route_fn
 
     def event_matches(self, pos1, pos2, pos3) -> Dict[Tuple, str]:
         return list(fn.select(self.match_predicate(pos1, pos2, pos3), self.routes.items()))
@@ -66,13 +68,12 @@ class RouteMap(singleton.Singleton):
         return ("{" in template_token and "}" in template_token) or template_token == ev_token
 
 
-def route(route_pattern):
+def route(pattern: Union[str, Tuple[str, str, str]], opts: Dict = None):
     """
     Route Mapper
-
     """
     def inner(fn):
-        RouteMap().add_route(route_pattern=route_pattern, fn=fn)
+        RouteMap().add_route(pattern=pattern, fn=fn, opts=opts)
     return inner
 
 

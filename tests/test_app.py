@@ -2,7 +2,7 @@ import pytest
 
 from .shared import *
 
-from pyfuncify import app, monad, error
+from pyfuncify import app, monad, error, app_serialisers
 
 #
 # Pipeline Functions
@@ -65,14 +65,14 @@ def it_adds_the_session_as_a_cookie(set_up_env,
 #
 
 def it_creates_a_route_matched_on_string():
-    template, route_fn = app.route_fn_from_kind('hello')
+    template, route_fn, opts = app.route_fn_from_kind('hello')
     result = route_fn(dummy_request())
 
     assert result.value.response.value.serialisable == {'hello': 'there'}
 
 
 def it_routes_based_on_tuple_and_template():
-    template, route_fn = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1/resource/uuid2'))
+    template, route_fn, opts = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1/resource/uuid2'))
 
     result = route_fn(dummy_request())
 
@@ -80,7 +80,7 @@ def it_routes_based_on_tuple_and_template():
 
 
 def it_implements_the_serialiser_protocol_for_the_response():
-    template, route_fn = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1/resource/uuid2'))
+    template, route_fn, opts = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1/resource/uuid2'))
 
     result = route_fn(dummy_request())
 
@@ -89,16 +89,22 @@ def it_implements_the_serialiser_protocol_for_the_response():
 
 
 def it_defaults_to_no_matching_routes_when_not_found():
-    template, route_fn = app.route_fn_from_kind("bad_route")
+    template, route_fn, opts = app.route_fn_from_kind("bad_route")
 
     result = route_fn(dummy_request())
 
     assert result.error().error.message == 'no matching route'
 
 def it_finds_the_route_pattern_by_function():
-    template, route_fn = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1'))
+    template, route_fn, opts = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1'))
 
     assert app.template_from_route_fn(route_fn) == ('API', 'GET', '/resourceBase/resource/{id1}')
+
+def it_parses_the_json_body(api_gateway_event_post_with_json_body):
+    event = app.event_factory(api_gateway_event_post_with_json_body)
+
+    assert event.body == {'test': 1}
+
 
 #
 # Request Builder Functions
@@ -134,31 +140,35 @@ def it_identifies_an_api_gateway_get_event_for_a_nested_resource(api_gateway_eve
     assert event.request_function
     assert event.path_params == {'id1': 'uuid1', 'id2': 'resource-uuid2'}
 
-
 #
 # Helpers
 #
 
-@app.route("hello")
+@app.route(pattern="hello")
 def hello_handler(request):
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'hello': 'there'}))))
 
 
-@app.route("no_matching_route")
+@app.route(pattern="no_matching_route")
 def handler_404(request):
     return monad.Left(request.replace('error', app.AppError(message='no matching route', code=404)))
 
 
-@app.route(('API', 'GET', '/resourceBase/resource/{id1}'))
+@app.route(pattern=('API', 'GET', '/resourceBase/resource/{id1}'))
 def get_resource(request):
     if request.event:
         pass
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
-@app.route(('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))
+@app.route(pattern=('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))
 def get_nested_resource(request):
     if request.event:
         breakpoint()
+    return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
+
+@app.route(pattern=('API', 'POST', '/resourceBase/resource/{id1}'),
+           opts={'body_parser': app_serialisers.json_parser})
+def get_nested_resource(request):
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 

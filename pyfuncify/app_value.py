@@ -50,6 +50,10 @@ class ApiGatewayRequestEvent(RequestEvent):
     query_params: Optional[dict] = None
     web_session: Optional[Any] = None
 
+    def clear_session(self):
+        self.web_session = None
+        self
+
     def returnable_session_state(self):
         return True
 
