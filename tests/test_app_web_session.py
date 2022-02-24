@@ -1,3 +1,5 @@
+from base64 import urlsafe_b64decode, urlsafe_b64encode
+
 from pyfuncify import app_web_session
 
 def it_created_a_session_from_a_multi_property_cookie():
@@ -21,6 +23,16 @@ def it_gets_a_property():
 
     assert session.get('session1').value() == '1'
 
+
+def it_gets_a_property_with_a_transform_fn():
+    prop = b'12345'
+    encoded_prop = bytes_to_base64url(prop)
+    session = app_web_session.WebSession().session_from_headers({'Cookie': "session1=1; session2={}".format(encoded_prop)})
+
+    assert session.get('session2').value() == encoded_prop
+    assert session.get('session2', base64url_to_bytes).value() == prop
+
+
 def it_doesnt_serialise_when_no_props():
     session = app_web_session.WebSession().session_from_headers(None)
 
@@ -40,3 +52,14 @@ def it_updates_a_property():
     session.set('session1', '2')
 
     assert session.get('session1').value() == '2'
+
+
+#
+# Helpers
+#
+
+def base64url_to_bytes(val: str) -> bytes:
+    return urlsafe_b64decode(f"{val}===")
+
+def bytes_to_base64url(val: bytes) -> str:
+    return urlsafe_b64encode(val).decode("utf-8").replace("=", "")

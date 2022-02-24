@@ -1,4 +1,4 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Callable
 from http import cookies
 from pymonad.tools import curry
 
@@ -9,6 +9,7 @@ class SessionProperty:
     def __init__(self, name: str, value: Union[cookies.Morsel, str]):
         self.name = name
         self.morsel = self.coerse_value(name, value)
+        self.transformer = fn.identity
 
     def coerse_value(self, name, val):
         if isinstance(val, cookies.Morsel):
@@ -21,12 +22,15 @@ class SessionProperty:
         self.morsel.set(self.name, val, val)
         pass
 
+    def value_transformer(self, transform_fn: Callable = fn.identity):
+        self.transformer = transform_fn
+        return self
 
     def serialise(self) -> str:
         return self.morsel.OutputString()
 
     def value(self):
-        return self.morsel.value
+        return self.transformer(self.morsel.value)
 
     def is_name(self, search_name):
         return self.name == search_name
@@ -55,10 +59,11 @@ class WebSession():
             return {}
         return {'Set-Cookie': [prop.serialise() for prop in self.properties]}
 
-    def get(self, name) -> SessionProperty:
+    def get(self, name: str, transform_fn: Callable = fn.identity) -> SessionProperty:
         if not self.properties:
             return None
-        return fn.find(self.prop_name_predicate(name), self.properties)
+        found = fn.find(self.prop_name_predicate(name), self.properties)
+        return found.value_transformer(transform_fn)
 
     def set(self, name, value):
         prop = self.get(name)
