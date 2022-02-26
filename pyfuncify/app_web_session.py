@@ -6,23 +6,35 @@ from . import fn
 
 class SessionProperty:
 
-    def __init__(self, name: str, value: Union[cookies.Morsel, str]):
+    def __init__(self, name: str, value: Union[cookies.Morsel, str], attributes: Dict = None):
         self.name = name
-        self.morsel = self.coerse_value(name, value)
+        self.attributes = attributes
+        self.morsel = self.coerse_value(name, value, attributes)
         self.transformer = fn.identity
 
-    def coerse_value(self, name, val):
+    def coerse_value(self, name, val, attributes):
         if isinstance(val, cookies.Morsel):
             return val
         morsel = cookies.Morsel()
         morsel.set(name, val, val)
+        self.add_attributes(morsel, attributes)
         return morsel
 
-    def update(self, val):
+    def update(self, val, attributes):
         self.morsel.set(self.name, val, val)
+        self.add_attributes(self.morsel, attributes)
         pass
 
+    def add_attributes(self, morsel, attributes):
+        if not attributes:
+            return morsel
+        for cookie_attr in attributes.items():
+            morsel[cookie_attr[0]] = cookie_attr[1]
+        return morsel
+
+
     def value_transformer(self, transform_fn: Callable = fn.identity):
+        
         self.transformer = transform_fn
         return self
 
@@ -65,12 +77,12 @@ class WebSession():
         found = fn.find(self.prop_name_predicate(name), self.properties)
         return found.value_transformer(transform_fn)
 
-    def set(self, name, value):
+    def set(self, name, value: str, attributes: Dict = None):
         prop = self.get(name)
         if prop:
-            prop.update(value)
+            prop.update(value, attributes)
         else:
-            self.properties.append(SessionProperty(name, value))
+            self.properties.append(SessionProperty(name, value, attributes))
         return self
 
     @curry(3)

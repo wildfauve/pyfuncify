@@ -8,6 +8,8 @@ from functools import reduce
 from operator import iconcat
 import re
 
+from . import monad
+
 """
 Common functions
 """

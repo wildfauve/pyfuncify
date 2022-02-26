@@ -11,6 +11,17 @@ def it_created_a_session_from_a_multi_property_cookie():
 
     assert props == [('session1', 'session1=1'), ('session2', 'session2=2')]
 
+def it_created_a_session_from_a_multi_property_cookie_aith_attributes():
+    cookie = {'Cookie': "session1=1; Max-Age=600; Path=/; session2=2; Max-Age=100"}
+    session = app_web_session.WebSession().session_from_headers(cookie)
+
+    assert len(session.properties) == 2
+
+    props = [(prop.name, prop.serialise()) for prop in session.properties]
+
+
+    assert props == [('session1', 'session1=1; Max-Age=600; Path=/'), ('session2', 'session2=2; Max-Age=100')]
+
 
 def it_serialises_session_as_multi_hdr_set_cookie():
     session = app_web_session.WebSession().session_from_headers({'Cookie': "session1=1; session2=2"})
@@ -45,6 +56,13 @@ def it_sets_new_property():
 
     assert session.get('session1').value() == '1'
 
+def it_sets_a_property_with_path_and_max_age():
+    session = app_web_session.WebSession().session_from_headers(None)
+
+    session.set('session1', "1", {'max-age': 600, 'path': "/"})
+
+    assert session.get('session1').serialise() == 'session1=1; Max-Age=600; Path=/'
+    
 
 def it_updates_a_property():
     session = app_web_session.WebSession().session_from_headers({'Cookie': "session1=1"})
