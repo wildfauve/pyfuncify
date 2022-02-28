@@ -72,6 +72,15 @@ def it_updates_a_property():
     assert session.get('session1').value() == '2'
 
 
+def it_clears_all_properties():
+    session = app_web_session.WebSession().session_from_headers({'Cookie': "session1=1"})
+
+    session.clear_all()
+
+    assert session.serialise_state_as_multi_header() == {}
+
+
+
 #
 # Helpers
 #

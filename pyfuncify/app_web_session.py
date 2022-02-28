@@ -85,6 +85,10 @@ class WebSession():
             self.properties.append(SessionProperty(name, value, attributes))
         return self
 
+    def clear_all(self):
+        self.properties = []
+        return self
+
     @curry(3)
     def prop_name_predicate(self, name, prop):
         return prop.is_name(name)
