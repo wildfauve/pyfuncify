@@ -2,7 +2,7 @@ import pytest
 
 from .shared import *
 
-from pyfuncify import app, monad, error, app_serialisers
+from pyfuncify import app, monad, error, app_serialisers, app_value
 
 #
 # Pipeline Functions
@@ -48,7 +48,7 @@ def it_executes_the_noop_path():
     assert result['body'] == '{"error": "no matching route", "code": 404, "step": "", "ctx": {}}'
 
 def it_adds_the_session_as_a_cookie(set_up_env,
-                              api_gateway_event_get):
+                                    api_gateway_event_get):
     result = app.pipeline(event=api_gateway_event_get,
                           context={},
                           env=Env().env,
@@ -58,6 +58,15 @@ def it_adds_the_session_as_a_cookie(set_up_env,
 
     assert result['multiValueHeaders'] == {'Set-Cookie': ['session=session_uuid', 'session1=session1_uuid']}
 
+def it_returns_a_201_created(set_up_env,
+                             api_gateway_event_get):
+    result = app.pipeline(event=api_gateway_event_get,
+                          context={},
+                          env=Env().env,
+                          params_parser=noop_callable,
+                          pip_initiator=noop_callable,
+                          handler_guard_fn=noop_callable)
+    assert result['statusCode'] == 201
 
 
 #
@@ -140,6 +149,8 @@ def it_identifies_an_api_gateway_get_event_for_a_nested_resource(api_gateway_eve
     assert event.request_function
     assert event.path_params == {'id1': 'uuid1', 'id2': 'resource-uuid2'}
 
+
+
 #
 # Helpers
 #
@@ -158,6 +169,7 @@ def handler_404(request):
 def get_resource(request):
     if request.event:
         pass
+    request.status_code = app_value.HttpStatusCode.CREATED
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
 @app.route(pattern=('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))

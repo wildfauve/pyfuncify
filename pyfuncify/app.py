@@ -251,20 +251,19 @@ def responder(request):
 
     if request.is_right() and request.value.response.is_right():
         # When the processing pipeline completes successfully and the response Dict is a success
-        body['statusCode']= 200
+        body['statusCode'] = request.value.status_code.value if request.value.status_code else 200
         body['body'] = request.value.response.value.serialise()
         status = 'ok'
     elif request.is_right() and request.value.response.is_left():
         # When the processing pipeline completes successfully but the response Dict is a failure
-        body['statusCode'] = 200
+        body['statusCode'] = request.value.status_code.value if request.value.status_code else 200
         body['body'] = request.value.response.error().serialise()
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.
-        body['statusCode'] = 400
+        body['statusCode'] = request.error().status_code.value if request.error().status_code else 400
         body['body'] = request.error().error.error().serialise()
         status = 'fail'
-
 
     logger.log(level='info', msg="End Handler", tracer=request.lift().tracer, ctx={}, status=status)
 

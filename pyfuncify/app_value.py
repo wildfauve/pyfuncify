@@ -1,8 +1,15 @@
 from typing import Optional, Dict, Any, List, Callable
 from datetime import datetime
 from dataclasses import dataclass
+from enum import Enum
 
 from . import tracer, error, app_serialisers
+
+class HttpStatusCode(Enum):
+    OK = 200
+    CREATED = 201
+    BadRequest = 400
+    Unauthorized = 401
 
 @dataclass
 class DataClassAbstract:
@@ -64,6 +71,7 @@ class Request(DataClassAbstract):
     event: RequestEvent
     context: dict
     tracer: tracer.Tracer
+    status_code: Optional[HttpStatusCode] = None
     request_handler: Optional[Callable] = None
     pip: Optional[dict] = None
     results: Optional[list] = None
