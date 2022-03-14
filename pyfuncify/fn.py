@@ -90,7 +90,7 @@ def find(fn, xs):
     """
     fn.find(fn.equality(fn.at('a')), '1', [{'a': '1'}])
     """
-    return next(select(fn, xs))
+    return next(select(fn, xs), None)
 
 def select(fn: Callable, xs: List) -> filter:
     """

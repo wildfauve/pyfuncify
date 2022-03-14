@@ -4,6 +4,9 @@ from datetime import datetime, timedelta, timezone
 from operator import methodcaller
 from functools import reduce
 import pytz
+"""
+Check out the Pendulum Lib for a better time libary
+"""
 
 def time_now(tz: timezone = timezone.utc, apply: Callable = None) -> datetime:
     """
