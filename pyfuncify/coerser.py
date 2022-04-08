@@ -7,7 +7,7 @@ def nested_coerse(d, u):
         if isinstance(v, collections.abc.Mapping):
             d[k] = nested_coerse(d.get(k, {}), v)
         else:
-            if type(v) in [str, int, bool, float]:
+            if type(v) in [str, int, bool, float, list]:
                 d[k] = v
             else:
                 coerse_fn = getattr(sys.modules[__name__], "coerser_{}".format(type(v).__name__), None)
