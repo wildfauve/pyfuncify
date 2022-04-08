@@ -1,4 +1,4 @@
-from pyfuncify import fn
+from pyfuncify import fn, chronos
 
 #
 # fn.identity
@@ -69,3 +69,4 @@ def it_fails_to_find_and_returns_nothing():
 
     result = fn.find_by_predicate(predicate_fn, [1,2,3])
     assert not result.value
+

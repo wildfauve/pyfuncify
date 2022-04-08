@@ -5,7 +5,7 @@ from functools import reduce
 import time
 
 from . tracer import Tracer
-from . import chronos
+from . import chronos, coerser
 
 # public interface
 def log(level: str, msg: str, tracer: Optional[Tracer], status: str = 'ok', ctx: Dict[str, str] = {}) -> None:
@@ -52,21 +52,8 @@ def perf_log(fn: str, delta_t: float):
     info(logger(), "PerfLog", {'ctx': {'fn': fn, 'delta_t': delta_t}})
 
 def meta(tracer, status: Union[str, int], ctx: Dict):
-    coersed_ctx = reduce(type_coersed, ctx.items(), {})
+    coersed_ctx = coerser.nested_coerse({}, ctx)
     return {**trace_meta(tracer), **{'ctx': coersed_ctx}, **{'status': status}}
-
-def type_coersed(result: Dict, kv: Tuple):
-    k, v = kv
-    if type(v) in [str, int]:
-        result[k] = v
-        return result
-    coerse_fn = getattr(sys.modules[__name__], "coerser_{}".format(type(v).__name__), None)
-    if coerse_fn:
-        result[k] = coerse_fn(v)
-    return result
-
-def coerser_datetime(dt):
-    return chronos.iso8601()(dt)
 
 def trace_meta(tracer):
     return tracer.serialise() if tracer else {}

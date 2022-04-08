@@ -7,8 +7,11 @@ from pymonad.reader import Pipe
 from functools import reduce
 from operator import iconcat
 import re
+from mini_lambda import x, _
 
-from . import monad
+import collections.abc
+
+from . import monad, chronos
 
 """
 Common functions
@@ -77,7 +80,8 @@ def find_by_predicate(predicate_fn: Callable, iterable: List):
     return partial_filter(predicate_fn, iterable).then(partial_first)
 
 def type_predicate(type):
-    return lambda x: x['_type'] == type
+    # return lambda x: x['_type'] == type
+    return _(x['_type'] == type)
 
 def partial_filter(fn: Callable, iterable: List):
     return Just(list(filter(fn, iterable)))
@@ -134,7 +138,7 @@ def negated_fn(fn: Callable, x):
     return not fn(x)
 
 def remove_none(xs):
-    return list(filter(lambda x: x is not None, xs))
+    return list(filter(_(x), xs))
 
 def not_empty(xs: List[Any]) -> bool:
     return len(xs) > 0
@@ -144,7 +148,6 @@ def only_one(xs: List[Any]) -> bool:
 
 def compose_iter(fn_list: List, initial_val):
     return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val)).flush()
-
 
 def flatten(xs: List):
     return reduce(iconcat, xs, [])
