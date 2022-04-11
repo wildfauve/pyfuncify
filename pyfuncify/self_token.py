@@ -209,12 +209,12 @@ def token_request_data():
 def not_in_token_retry_window(bearer_token: str) -> bool:
     id_token = crypto.parse_generate_id_token(bearer_token)
     return random_retry_window.left_of_window(width=TokenConfig().window_width,
-                                              end=id_token.value.exp - TokenConfig().expiry_threshold,
+                                              end=id_token.value.exp() - TokenConfig().expiry_threshold,
                                               at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
 
 def in_token_retry_window(id_token):
     return random_retry_window.in_window(width=TokenConfig().window_width,
-                                         end=id_token.exp - TokenConfig().expiry_threshold,
+                                         end=id_token.exp() - TokenConfig().expiry_threshold,
                                          at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
 
 def build_token_error(result):

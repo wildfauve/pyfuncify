@@ -2,12 +2,16 @@ from typing import Callable, Any
 from pymonad.tools import curry
 from . import monad, fn
 
-def authorise_activity_policy(name: str, ctx: str, namespace: str, pip_fn: Callable, error_cls: Any=None):
+def authorise_activity_policy(name: str,
+                              ctx: str,
+                              namespace: str,
+                              pip_fn: Callable,
+                              error_cls: Any=None):
     """
     Adds activity-based policy checking to the function.
 
     + Ctx is injected (the tokenised activity ctx of the fn).
-    + pip_fn is a callable which provides the PIP.  The PIP MUST be a dict with a 'subject' key, which has a function
+    + pip_fn is a callable which provides the PIP.  The PIP MUST be a dict with a 'sub' key, which has a function
       'activities' which returns a set of activities.  For example:
       {'subject': SlackSubject(slack_user='U09U563QC', profile_id='uuid_1', activities={'opbot:resource:mention:request', 'marketdata:resource:instrument:read-all'})}
     """
@@ -16,7 +20,7 @@ def authorise_activity_policy(name: str, ctx: str, namespace: str, pip_fn: Calla
             pip = pip_fn()
             if pip is None:
                 return monad.Left(error_cls("Unauthorised", name, 401)) if error_cls else monad.Left("Unauthorised")
-            if activity_policy(namespace, pip['subject'].activities, ctx):
+            if activity_policy(namespace, pip['sub'].activities, ctx):
                 return monad.Right(fn(*args, **kwargs))
             else:
                 return monad.Left(error_cls("Unauthorised", name, 401)) if error_cls else monad.Left("Unauthorised")

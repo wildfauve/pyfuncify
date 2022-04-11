@@ -125,6 +125,8 @@ def http_retryable_monad_failure_predicate(monad_result: Union[Any, monad.MEithe
     """
     if not isinstance(monad_result, monad.MEither):
         return False
+    if monad_result.is_left() and isinstance(monad_result.error(), str):
+        return False
     return monad_result.is_left() and monad_result.error().retryable
 
 def circuit_failure(circuit_state_provider: Any) -> Any:

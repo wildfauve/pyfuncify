@@ -30,14 +30,14 @@ def test_failed_activity_auth(failed_pip_activities_fn):
 @pytest.fixture
 def success_pip_activities_fn():
     def pip_fn():
-        return {'subject': Pip(activities={'service:resource:domain1:action1'})}
+        return {'sub': Pip(activities={'service:resource:domain1:action1'})}
     return pip_fn
 
 
 @pytest.fixture
 def failed_pip_activities_fn():
     def pip_fn():
-        return {'subject': Pip(activities={'service:resource:domain2:action2'})}
+        return {'sub': Pip(activities={'service:resource:domain2:action2'})}
     return pip_fn
 
 

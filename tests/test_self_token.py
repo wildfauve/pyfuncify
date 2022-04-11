@@ -44,6 +44,9 @@ class Tracer():
     def serialise(self):
         return {'env': 'test', 'handler_id': 'e5655b5f-e677-4a12-b8d7-0fa0b7e9dd20', 'aws_request_id': 'handler-id-1'}
 
+def setup_module():
+    crypto.Idp().init_keys(jwk=jwk_rsa_key_pair())
+
 
 def setup_function():
     self_token.invalidate_cache()
@@ -55,7 +58,7 @@ def test_get_token_for_the_very_first_time(set_up_token_config_with_provider, se
     result = self_token.token(tracer=Tracer())
 
     assert result.is_right() == True
-    assert result.value.sub == "1@clients"
+    assert result.value.id_claims().sub == "1@clients"
 
 def test_token_persisted_in_provider(set_up_token_config_with_provider, set_up_env, identity_request_mock):
     result = self_token.token(tracer=Tracer())
@@ -245,7 +248,9 @@ def looks_like_a_jwt(possible_token):
 
 @pytest.fixture
 def identity_request_mock(requests_mock):
-    requests_mock.post("https://test.host/token", json=success_token_callback, headers={'Content-Type': 'application/json; charset=utf-8'})
+    requests_mock.post("https://test.host/token",
+                       json=success_token_callback,
+                       headers={'Content-Type': 'application/json; charset=utf-8'})
 
 @pytest.fixture
 def identity_request_error_mock(requests_mock):
@@ -301,7 +306,7 @@ def success_token_callback(request, context):
 
 def success_token():
     return {
-                "access_token": crypto.generate_signed_jwt(crypto.rsa_private_key()),
+                "access_token": crypto.generate_signed_jwt(crypto.Idp().jwk),
                 "expires_in": 86400,
                 "token_type": "Bearer"
             }
