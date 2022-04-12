@@ -8,14 +8,11 @@ from simple_memory_cache import GLOBAL_CACHE
 import re
 import time
 
-from . import monad, http_adapter, http, logger, singleton, circuit, chronos, error
+from . import monad, http_adapter, http, logger, singleton, circuit, chronos, error, crypto
 
 jwks_cache = GLOBAL_CACHE.MemoryCachedVar('jwks_cache')
 
 event_authorisation_hdr_key = "Authorization"
-
-class JwtDecodingError(error.PyFuncifyError):
-    pass
 
 class JwksGetError(error.PyFuncifyError):
     pass
@@ -39,47 +36,17 @@ class SubjectTokenConfig(singleton.Singleton):
         self.asserted_iss = asserted_iss
         pass
 
-class IdToken:
-    claims_value = collections.namedtuple('IdTokenClaims', ['iss', 'sub', 'aud', 'iat', 'exp', 'azp'])
-
-    def __init__(self, jwt, claims):
-        self.jwt = jwt
-        self.claims = claims
-
-    def id_claims(self):
-        return self.claims_value(iss=self.claims['iss'],
-                                 sub=self.claims['sub'],
-                                 aud=self.claims['aud'],
-                                 iat=self.claims['iat'],
-                                 exp=self.claims['exp'],
-                                 azp=self.claims['azp'])
-
-
 
 def parse_generate_id_token(serialised_jwt):
     """
     Takes an encoded JWT and returns an verified id_token
     """
-    return cacheable_jwks() >> decode_jwt(serialised_jwt) >> to_id_token
-
-
-@curry(2)
-@monad.monadic_try(name="decode_jwt", status=401, error_cls=JwtDecodingError)
-def decode_jwt(serialised_jwt: str, jwks) -> Tuple:
-    """
-    Parses the jwt, validing the signature (from JWKS) and the EXP/AUD claims
-    """
-    return serialised_jwt, jwt.JWT(jwt=serialised_jwt, key=jwks, check_claims=claims_to_assert())
+    return cacheable_jwks() >> crypto.decode_jwt(claims_to_assert(), serialised_jwt) >> crypto.to_id_token
 
 
 def claims_to_assert():
     return {'iss': SubjectTokenConfig().asserted_iss,
             'exp': int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()]))}
-
-
-def to_id_token(decoded_jwt_tuple) -> monad.EitherMonad[IdToken]:
-    serialised_jwt, decoded_jwt = decoded_jwt_tuple
-    return monad.Right(IdToken(serialised_jwt, (json.loads(decoded_jwt.claims))))
 
 
 def cacheable_jwks():

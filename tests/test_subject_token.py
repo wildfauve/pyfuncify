@@ -1,8 +1,11 @@
 from pyfuncify import subject_token
+from pyfuncify import crypto as Cy
+
 from jwcrypto import jwk, jwt
 import time
 
 from .shared import *
+
 
 def setup_module():
     crypto.Idp().init_keys(jwk=jwk_rsa_key_pair())
@@ -45,7 +48,7 @@ def test_token_failed_when_expired(jwks_mock):
     id_token = subject_token.parse_generate_id_token(jwt)
 
     assert id_token.is_left()
-    assert isinstance(id_token.error(), subject_token.JwtDecodingError)
+    assert isinstance(id_token.error(), Cy.JwtDecodingError)
     assert "Expired at {}".format(exp) in id_token.error().message
 
 def test_token_failed_when_jwks_failure(jwks_request_failure_mock):
