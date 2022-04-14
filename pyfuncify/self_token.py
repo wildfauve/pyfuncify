@@ -1,4 +1,4 @@
-from typing import Tuple, Callable, Any
+from typing import Tuple, Callable, Any, Protocol
 from simple_memory_cache import GLOBAL_CACHE
 
 from . import chronos, monad, http_adapter, crypto, random_retry_window, logger, singleton, circuit
@@ -37,6 +37,15 @@ class TokenError(Error):
 class TokenEnvError(Error):
     pass
 
+class TokenPersistenceProviderProtocol(Protocol):
+
+    def write(self, key, value):
+        ...
+
+    def read(self, key):
+        ...
+
+
 """
 The token config is setup by the library caller to provide 4 arguments:
 
@@ -61,7 +70,7 @@ class TokenConfig(singleton.Singleton):
     default_expiry_threshold    = (60*60)  # The room to leave before the actual token expiry
 
     def configure(self,
-                  token_persistence_provider: Callable,
+                  token_persistence_provider: TokenPersistenceProviderProtocol,
                   env: Any,
                   circuit_state_provider: circuit.CircuitStateProviderProtocol = None,
                   window_width: int = default_window_width,

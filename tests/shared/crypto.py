@@ -26,7 +26,6 @@ Example:
 
 """
 
-
 class Idp(singleton.Singleton):
     def init_keys(self, jwk):
         self.jwk = jwk
@@ -34,6 +33,9 @@ class Idp(singleton.Singleton):
 
     def jwks(self):
         return jwk_key_set(self.jwk)
+
+    def jwks_to_json(self):
+        return json.dumps(self.jwks())
 
     def jwks_from_json(self):
         return jwk.JWKSet.from_json(json.dumps(self.jwks()))
@@ -47,6 +49,7 @@ def jwks_mock(requests_mock):
     requests_mock.get("https://idp.example.com/.well-known/jwks",
                       json=Idp().jwks(),
                       headers={'Content-Type': 'application/json; charset=utf-8'})
+    return requests_mock
 
 
 @pytest.fixture

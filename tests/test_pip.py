@@ -2,7 +2,6 @@ from pyfuncify import pip, app, subject_token, monad
 
 from .shared import *
 
-
 def setup_module():
     crypto.Idp().init_keys(jwk=jwk_rsa_key_pair())
 

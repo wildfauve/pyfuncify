@@ -7,7 +7,7 @@ from .shared import *
 
 from pyfuncify import self_token, chronos, fn, monad, circuit
 
-class TokenPersistenceProvider():
+class TokenPersistenceProvider(self_token.TokenPersistenceProviderProtocol):
     def __init__(self):
         self.bearer_token = None
         pass

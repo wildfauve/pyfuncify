@@ -1,12 +1,8 @@
-import json
-from typing import Tuple
+from typing import Tuple, Protocol, Union
 from jwcrypto import jwk, jwt
-import requests
 from pymonad.tools import curry
-import collections
 from simple_memory_cache import GLOBAL_CACHE
 import re
-import time
 
 from . import monad, http_adapter, http, logger, singleton, circuit, chronos, error, crypto
 
@@ -14,8 +10,20 @@ jwks_cache = GLOBAL_CACHE.MemoryCachedVar('jwks_cache')
 
 event_authorisation_hdr_key = "Authorization"
 
+JWKS = "JWKS"  # name in cache
+
+
 class JwksGetError(error.PyFuncifyError):
     pass
+
+
+class JwksPersistenceProviderProtocol(Protocol):
+
+    def write(self, key, value):
+        ...
+
+    def read(self, key):
+        ...
 
 
 class SubjectTokenConfig(singleton.Singleton):
@@ -28,9 +36,11 @@ class SubjectTokenConfig(singleton.Singleton):
     """
 
     def configure(self,
+                  jwks_persistence_provider: JwksPersistenceProviderProtocol,
                   jwks_endpoint: str,
                   asserted_iss: str = "",
                   circuit_state_provider: circuit.CircuitStateProviderProtocol = None):
+        self.jwks_persistence_provider = jwks_persistence_provider
         self.jwks_endpoint = jwks_endpoint
         self.circuit_state_provider = circuit_state_provider
         self.asserted_iss = asserted_iss
@@ -59,15 +69,19 @@ def _jwks():
     Takes a key id (kid), requests the jwks from the identity jwks well-known service,
     returning a monadic jwt.JWKkeys
     """
-    return monad.Right(jwks_resource()) >> get_jwks >> jwks_from_json
+    return monad.Right(jwks_resource()) >> jwks_from_cache >> get_jwks >> cache_jwks >> jwks_from_json
 
 
 def jwk_cache_invalidate():
     jwks_cache.invalidate()
 
+def cache_jwks(jwks: Tuple[int, str]):
+    _status, keys = jwks
+    SubjectTokenConfig().jwks_persistence_provider.write(JWKS, keys)
+    return monad.Right(jwks)
 
 @monad.monadic_try(name="jwks_from_json")
-def jwks_from_json(jwks: str):
+def jwks_from_json(jwks: Tuple[int, str]):
     """
     Takes a JSON JWKS keyset and returns a wrapper object
     """
@@ -85,26 +99,43 @@ def rsa_key_from_kid(kid, op, jwks):
     return jwks.get_key(kid).get_op_key(op)
 
 
-def get_jwks(endpoint):
+def jwks_from_cache(endpoint):
+    if not SubjectTokenConfig().jwks_persistence_provider:
+        return monad.right((endpoint, None))
+
+    result = cache_reader(SubjectTokenConfig().jwks_persistence_provider)
+
+    if result is None or result.is_left():
+        return monad.Right((endpoint, None))
+    return monad.Right((endpoint, result.value.value))
+
+
+def cache_reader(provider: JwksPersistenceProviderProtocol):
+    if not hasattr(provider, 'read'):
+        return None
+    return provider.read(key=JWKS)
+
+
+def get_jwks(endpoint_tuple: Tuple[str, Union[str, None]]):
     """
     Get the JWKS json from the Identity well known resource.
     Inject the http_status_exception to test for a Right from the request, but a failure HTTP status
-    """
-    result = http_adapter.get(endpoint=endpoint,
-                              name='jwks_service',
-                              circuit_state_provider=SubjectTokenConfig().circuit_state_provider,
-                              exception_test_fn=http.http_response_monad(__name__, http.extract_fn_raw),
-                              error_cls=JwksGetError)
 
-    return result
+    The endpoint tuple has the jwks_endpoint and either None or jwks obtained from cache
+    """
+    endpoint, jwks = endpoint_tuple
+    if not jwks:
+        return http_adapter.get(endpoint=endpoint,
+                                name='jwks_service',
+                                circuit_state_provider=SubjectTokenConfig().circuit_state_provider,
+                                exception_test_fn=http.http_response_monad(__name__, http.extract_fn_raw),
+                                error_cls=JwksGetError)
+
+    return monad.Right((200, jwks))
 
 
 def jwks_resource():
     return SubjectTokenConfig().jwks_endpoint
-
-
-def idp_endpoint():
-    return Env.idp_endpoint
 
 
 def parse_bearer_token(hdrs: dict) -> str:
