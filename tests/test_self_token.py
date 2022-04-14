@@ -45,7 +45,7 @@ class Tracer():
         return {'env': 'test', 'handler_id': 'e5655b5f-e677-4a12-b8d7-0fa0b7e9dd20', 'aws_request_id': 'handler-id-1'}
 
 def setup_module():
-    crypto.Idp().init_keys(jwk=jwk_rsa_key_pair())
+    crypto_helpers.Idp().init_keys(jwk=jwk_rsa_key_pair())
 
 
 def setup_function():
@@ -306,7 +306,7 @@ def success_token_callback(request, context):
 
 def success_token():
     return {
-                "access_token": crypto.generate_signed_jwt(crypto.Idp().jwk),
+                "access_token": crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk),
                 "expires_in": 86400,
                 "token_type": "Bearer"
             }

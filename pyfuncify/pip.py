@@ -15,6 +15,13 @@ The PIP is controlled by the apps handler.  If it is used, it must provide the f
     + userinfo. Bool.  Whether to get userinfo or not.  The default is False.  This means pip will not cache the subject.
     + userinfo_fn.  A function which returns the result of the userinfo endpoint.  The result must be in the form of a 
                     standard OIDC claims set, and must have a 'sub' claim.
+
+To use the PIP with the app handler, add a wrapper function which calls pip with its config and the app.request object:
+The wrapper must add the generated PIP to the request.pip property.  For example:
+   > request.pip = pip.pip(pip.PipConfig(), request)
+   > return monad.Right(request)
+
+
 """
 
 @define

@@ -2,7 +2,7 @@ import pytest
 
 from pyfuncify import crypto
 
-from .shared import crypto as fixture_crypto
+from .shared import crypto_helpers as fixture_crypto
 
 def setup_module():
     fixture_crypto.Idp().init_keys(jwk=fixture_crypto.jwk_rsa_key_pair())

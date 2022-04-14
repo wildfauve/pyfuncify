@@ -2,8 +2,9 @@ from pyfuncify import pip, app, subject_token, monad
 
 from .shared import *
 
+
 def setup_module():
-    crypto.Idp().init_keys(jwk=jwk_rsa_key_pair())
+    crypto_helpers.Idp().init_keys(jwk=jwk_rsa_key_pair())
 
 
 def setup_function(fn):
@@ -17,6 +18,7 @@ def test_returns_pip_with_valid_token(api_gateway_event_get, jwks_mock):
     assert isinstance(result, pip.Pip)
     assert result.id_token.is_right()
     assert result.id_token.value.sub() == "1@clients"
+
 
 def test_failures_to_validate_token(api_gateway_event_get, jwks_mock):
     result = pip.pip(pip.PipConfig(), api_request(api_gateway_event_get, "bad_token"))
@@ -44,13 +46,19 @@ def test_gets_userinfo(api_gateway_event_get,
 
 def test_userinfo_meets_protocol_for_getting_activities(api_gateway_event_get,
                                                         jwks_mock):
-
-
     config = pip.PipConfig(userinfo=True,
                            userinfo_get_fn=get_userinfo_mock)
     result = pip.pip(config, api_request(api_gateway_event_get))
 
     assert result.subject.value.activities() == ['activity1', 'activity2']
+
+
+def test_doesnt_throw_error_when_cache_provider_not_set(api_gateway_event_get,
+                                                        jwks_mock):
+    config = pip.PipConfig()
+    result = pip.pip(config, api_request(api_gateway_event_get))
+
+    assert result.token_valid()
 
 
 #
@@ -62,7 +70,7 @@ def set_up_token_config():
 
 
 def api_request(event, token=None):
-    token_to_add = token if token else crypto.generate_signed_jwt(crypto.Idp().jwk)
+    token_to_add = token if token else crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk)
     event['headers']['Authorization'] = event['headers']['Authorization'].replace("{}", token_to_add)
     return app.Request(event=app.event_factory(event), context={}, tracer={})
 

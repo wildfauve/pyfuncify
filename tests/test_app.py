@@ -2,7 +2,10 @@ import pytest
 
 from .shared import *
 
-from pyfuncify import app, monad, error, app_serialisers, app_value
+from pyfuncify import app, monad, error, app_serialisers, app_value, pip, subject_token, pdp
+
+class UnAuthorised(app.AppError):
+    pass
 
 #
 # Pipeline Functions
@@ -20,7 +23,6 @@ def it_executes_a_pipeline_from_s3_event(set_up_env,
     assert result['statusCode'] == 200
     assert result['headers']['Content-Type'] == 'application/json'
     assert result['body'] == '{"hello": "there"}'
-
 
 
 def it_fails_on_expectations():
@@ -43,10 +45,10 @@ def it_executes_the_noop_path():
                           pip_initiator=noop_callable,
                           handler_guard_fn=noop_callable)
 
-
     assert result['statusCode'] == 400
     assert result['headers'] == {'Content-Type': 'application/json'}
     assert result['body'] == '{"error": "no matching route", "code": 404, "step": "", "ctx": {}}'
+
 
 def it_adds_the_session_as_a_cookie(set_up_env,
                                     api_gateway_event_get):
@@ -59,6 +61,7 @@ def it_adds_the_session_as_a_cookie(set_up_env,
 
     assert result['multiValueHeaders'] == {'Set-Cookie': ['session=session_uuid', 'session1=session1_uuid']}
 
+
 def it_returns_a_201_created(set_up_env,
                              api_gateway_event_get):
     result = app.pipeline(event=api_gateway_event_get,
@@ -68,6 +71,28 @@ def it_returns_a_201_created(set_up_env,
                           pip_initiator=noop_callable,
                           handler_guard_fn=noop_callable)
     assert result['statusCode'] == 201
+
+
+#
+# Authorisation
+#
+
+def it_returns_a_401_unauthorised(set_up_env,
+                                  api_gateway_event_get,
+                                  set_up_mock_idp,
+                                  jwks_mock):
+    subject_token.SubjectTokenConfig().configure(jwks_endpoint="https://idp.example.com/.well-known/jwks",
+                                                 jwks_persistence_provider=None,
+                                                 asserted_iss=None)
+
+    result = app.pipeline(event=change_path_to_authz_fn(api_gateway_event_get),
+                          context={},
+                          env=Env().env,
+                          params_parser=noop_callable,
+                          pip_initiator=pip_wrapper,
+                          handler_guard_fn=noop_callable)
+
+    assert result['statusCode'] == 401
 
 
 #
@@ -105,10 +130,12 @@ def it_defaults_to_no_matching_routes_when_not_found():
 
     assert result.error().error.message == 'no matching route'
 
+
 def it_finds_the_route_pattern_by_function():
     template, route_fn, opts = app.route_fn_from_kind(('API', 'GET', '/resourceBase/resource/uuid1'))
 
     assert app.template_from_route_fn(route_fn) == ('API', 'GET', '/resourceBase/resource/{id1}')
+
 
 def it_parses_the_json_body(api_gateway_event_post_with_json_body):
     event = app.event_factory(api_gateway_event_post_with_json_body)
@@ -129,9 +156,10 @@ def it_identifies_an_s3_event(s3_event_hello):
     assert event.objects[0].bucket == 'hello'
     assert event.objects[0].key == 'hello_file.json'
 
+
 def it_identifies_an_api_gateway_get_event(api_gateway_event_get):
     event = app.event_factory(api_gateway_event_get)
-    
+
     assert isinstance(event, app.ApiGatewayRequestEvent)
 
     assert event.kind == ('API', 'GET', '/resourceBase/resource/uuid1')
@@ -150,6 +178,13 @@ def it_identifies_an_api_gateway_get_event_for_a_nested_resource(api_gateway_eve
     assert event.request_function
     assert event.path_params == {'id1': 'uuid1', 'id2': 'resource-uuid2'}
 
+
+#
+# Local Fixtures
+#
+@pytest.fixture
+def set_up_mock_idp():
+    crypto_helpers.Idp().init_keys(jwk=jwk_rsa_key_pair())
 
 
 #
@@ -173,11 +208,24 @@ def get_resource(request):
     request.status_code = app_value.HttpStatusCode.CREATED
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
 
+
+@app.route(pattern=('API', 'GET', '/resourceBase/authz_resource/{id1}'))
+def get_resource_protected_by_authz(request):
+    result = get_authz_resource(request)
+    request.status_code = app_value.HttpStatusCode(result.error().code)
+    return monad.Left(request.replace('error', result.error()))
+
+@pdp.activity_policy_pdp("a_service", "service:resource:domain1:action1", None, UnAuthorised)
+def get_authz_resource(request):
+    pass # because it will be unauthorised
+
+
 @app.route(pattern=('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))
 def get_nested_resource(request):
     if request.event:
         breakpoint()
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'resource': 'uuid1'}))))
+
 
 @app.route(pattern=('API', 'POST', '/resourceBase/resource/{id1}'),
            opts={'body_parser': app_serialisers.json_parser})
@@ -188,9 +236,19 @@ def get_nested_resource(request):
 def noop_callable(value):
     return monad.Right(value)
 
+
 def failed_expectations(value):
     return monad.Left(app.AppError(message="Env expectations failure", code=500))
 
 
 def dummy_request():
     return app.Request(event={}, context={}, tracer={})
+
+
+def pip_wrapper(request):
+    request.pip = pip.pip(pip.PipConfig(), request)
+    return monad.Right(request)
+
+def change_path_to_authz_fn(event):
+    event['path'] = '/resourceBase/authz_resource/uuid1'
+    return event

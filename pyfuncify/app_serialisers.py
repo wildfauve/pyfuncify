@@ -3,7 +3,7 @@ import json
 
 from . import monad
 
-class Serialiser(Protocol):
+class SerialiserProtocol(Protocol):
     def __init__(self, serialisable: Any, serialisation: Callable):
         ...
 
@@ -11,7 +11,7 @@ class Serialiser(Protocol):
         ...
 
 
-class DictToJsonSerialiser(Serialiser):
+class DictToJsonSerialiser(SerialiserProtocol):
     def __init__(self, serialisable, serialisaton=None):
         self.serialisable = serialisable
         self.serialisation = serialisaton

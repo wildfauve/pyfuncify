@@ -24,12 +24,16 @@ def activity_policy_pdp(name: str,
         def invoke(*args, **kwargs):
             pip = kwargs.get('pip', None)
             if pip is None or pip.subject.is_left():
-                return monad.Left(error_cls("Unauthorised", name, 401)) if error_cls else monad.Left("Unauthorised")
+                return monad.Left(error_cls(message="Unauthorised",
+                                            name=name,
+                                            code=401)) if error_cls else monad.Left("Unauthorised")
 
             if activity_policy(namespace, pip.subject.value.activities(), ctx):
                 return monad.Right(fn(*args, **kwargs))
             else:
-                return monad.Left(error_cls("Unauthorised", name, 401)) if error_cls else monad.Left("Unauthorised")
+                return monad.Left(error_cls(message="Unauthorised",
+                                            name=name,
+                                            code=401)) if error_cls else monad.Left("Unauthorised")
         return invoke
     return inner
 

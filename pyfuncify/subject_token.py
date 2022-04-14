@@ -36,9 +36,9 @@ class SubjectTokenConfig(singleton.Singleton):
     """
 
     def configure(self,
-                  jwks_persistence_provider: JwksPersistenceProviderProtocol,
                   jwks_endpoint: str,
                   asserted_iss: str = "",
+                  jwks_persistence_provider: JwksPersistenceProviderProtocol = None,
                   circuit_state_provider: circuit.CircuitStateProviderProtocol = None):
         self.jwks_persistence_provider = jwks_persistence_provider
         self.jwks_endpoint = jwks_endpoint
@@ -77,7 +77,8 @@ def jwk_cache_invalidate():
 
 def cache_jwks(jwks: Tuple[int, str]):
     _status, keys = jwks
-    SubjectTokenConfig().jwks_persistence_provider.write(JWKS, keys)
+    if SubjectTokenConfig().jwks_persistence_provider:
+        SubjectTokenConfig().jwks_persistence_provider.write(JWKS, keys)
     return monad.Right(jwks)
 
 @monad.monadic_try(name="jwks_from_json")
@@ -101,7 +102,7 @@ def rsa_key_from_kid(kid, op, jwks):
 
 def jwks_from_cache(endpoint):
     if not SubjectTokenConfig().jwks_persistence_provider:
-        return monad.right((endpoint, None))
+        return monad.Right((endpoint, None))
 
     result = cache_reader(SubjectTokenConfig().jwks_persistence_provider)
 

@@ -22,7 +22,7 @@ class JwtPersistenceProvider(subject_token.JwksPersistenceProviderProtocol):
 
 
 def setup_module():
-    crypto.Idp().init_keys(jwk=jwk_rsa_key_pair())
+    crypto_helpers.Idp().init_keys(jwk=jwk_rsa_key_pair())
 
 
 def setup_function(fn):
@@ -42,7 +42,7 @@ def test_jwks_are_persisted(jwks_mock):
     assert 'keys' in subject_token.SubjectTokenConfig().jwks_persistence_provider.read("JWKS").value.value
 
 def test_read_jwks_from_cache(mocker):
-    subject_token.SubjectTokenConfig().jwks_persistence_provider.write("JWKS", crypto.Idp().jwks_to_json())
+    subject_token.SubjectTokenConfig().jwks_persistence_provider.write("JWKS", crypto_helpers.Idp().jwks_to_json())
 
     get_http_spy = mocker.spy(http_adapter, 'get_invoke')
 
@@ -66,7 +66,7 @@ def test_get_jwks_with_key_id(jwks_mock):
 
 
 def test_generate_id_token_from_jwt(jwks_mock):
-    jwt = crypto.generate_signed_jwt(crypto.Idp().jwk)
+    jwt = crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk)
 
     id_token = subject_token.parse_generate_id_token(jwt)
 
@@ -76,7 +76,7 @@ def test_generate_id_token_from_jwt(jwks_mock):
 
 def test_token_failed_when_expired(jwks_mock):
     exp = (int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])) - (60))
-    jwt = crypto.generate_signed_jwt(crypto.Idp().jwk, exp)
+    jwt = crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk, exp)
 
     id_token = subject_token.parse_generate_id_token(jwt)
 
@@ -86,7 +86,7 @@ def test_token_failed_when_expired(jwks_mock):
 
 
 def test_token_failed_when_jwks_failure(jwks_request_failure_mock):
-    jwt = crypto.generate_signed_jwt(crypto.Idp().jwk)
+    jwt = crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk)
 
     id_token = subject_token.parse_generate_id_token(jwt)
 
