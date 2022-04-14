@@ -47,7 +47,7 @@ class Pip:
         return self.id_token.is_right()
 
 @curry(2)
-def pip(config: callable, request):
+def pip(config: PipConfig, request):
     info = Pip(id_token=jwt_parser(config, request))
 
     return fn.compose_iter([userinfo(config)], info)

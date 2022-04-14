@@ -22,6 +22,7 @@ def it_executes_a_pipeline_from_s3_event(set_up_env,
     assert result['body'] == '{"hello": "there"}'
 
 
+
 def it_fails_on_expectations():
     result = app.pipeline(event={},
                           context={},
