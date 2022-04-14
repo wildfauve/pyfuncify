@@ -7,11 +7,10 @@ from . import subject_token, monad, crypto, fn
 Take a request and adds a Policy information Object.
 
 The request must contain a header containing the bearer token.  This will be parsed and the result (which may be a failure) 
-is available in the PIP for a PEP to interrogate.  The token is validated by the subject_token module.  This will have been
+is available in the PIP for a PEP to interrogate.  The token is validated by the subject_token module.  This must have been
 configured with the JWKS endpoint to allow for JWT signature validation.
 
 The PIP is controlled by the apps handler.  If it is used, it must provide the following:
-
 + pip_config.  An instance of PipConfig with the following properties:
     + userinfo. Bool.  Whether to get userinfo or not.  The default is False.  This means pip will not cache the subject.
     + userinfo_fn.  A function which returns the result of the userinfo endpoint.  The result must be in the form of a 
