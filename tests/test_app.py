@@ -215,7 +215,7 @@ def get_resource_protected_by_authz(request):
     request.status_code = app_value.HttpStatusCode(result.error().code)
     return monad.Left(request.replace('error', result.error()))
 
-@pdp.activity_policy_pdp("a_service", "service:resource:domain1:action1", None, UnAuthorised)
+@pdp.activity_pdp_decorator("a_service", "service:resource:domain1:action1", None, UnAuthorised)
 def get_authz_resource(request):
     pass # because it will be unauthorised
 

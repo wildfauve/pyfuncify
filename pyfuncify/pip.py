@@ -51,7 +51,12 @@ class Pip:
     subject: monad.EitherMonad[UserinfoStateProtocol] = None
 
     def token_valid(self):
-        return self.id_token.is_right()
+        return self.id_token and self.id_token.is_right()
+
+    def subject_activities(self):
+        if not self.subject or self.subject.is_left() or not self.subject.value.activities():
+            return None
+        return self.subject.value.activities()
 
 @curry(2)
 def pip(config: PipConfig, request):
