@@ -10,6 +10,7 @@ class HttpStatusCode(Enum):
     CREATED = 201
     BadRequest = 400
     Unauthorized = 401
+    InternalServerError = 500
 
 @dataclass
 class DataClassAbstract:

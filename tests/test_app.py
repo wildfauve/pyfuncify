@@ -4,8 +4,10 @@ from .shared import *
 
 from pyfuncify import app, monad, error, app_serialisers, app_value, pip, subject_token, pdp
 
+
 class UnAuthorised(app.AppError):
     pass
+
 
 #
 # Pipeline Functions
@@ -31,8 +33,8 @@ def it_fails_on_expectations():
                           env=Env().env,
                           params_parser=noop_callable,
                           pip_initiator=noop_callable,
-                          handler_guard_fn=failed_expectations)
-    assert result['statusCode'] == 400
+                          handler_guard_fn=failed_env_expectations)
+    assert result['statusCode'] == 500
     assert result['headers'] == {'Content-Type': 'application/json'}
     assert result['body'] == '{"error": "Env expectations failure", "code": 500, "step": "", "ctx": {}}'
 
@@ -77,20 +79,40 @@ def it_returns_a_201_created(set_up_env,
 # Authorisation
 #
 
-def it_returns_a_401_unauthorised(set_up_env,
-                                  api_gateway_event_get,
-                                  set_up_mock_idp,
-                                  jwks_mock):
+def it_returns_a_subject_activities_401_unauthorised(set_up_env,
+                                                     api_gateway_event_get,
+                                                     set_up_mock_idp,
+                                                     jwks_mock):
     subject_token.SubjectTokenConfig().configure(jwks_endpoint="https://idp.example.com/.well-known/jwks",
                                                  jwks_persistence_provider=None,
                                                  asserted_iss=None)
 
-    result = app.pipeline(event=change_path_to_authz_fn(api_gateway_event_get),
+    result = app.pipeline(event=api_request_with_token(change_path_to_authz_fn(api_gateway_event_get)),
                           context={},
                           env=Env().env,
                           params_parser=noop_callable,
                           pip_initiator=pip_wrapper,
-                          handler_guard_fn=noop_callable)
+                          handler_guard_fn=failed_token_expectation)
+
+    assert result['statusCode'] == 401
+
+
+def it_returns_a_invalid_token_401_unauthorised(set_up_env,
+                                                api_gateway_event_get,
+                                                set_up_mock_idp,
+                                                jwks_mock):
+
+    subject_token.SubjectTokenConfig().configure(jwks_endpoint="https://idp.example.com/.well-known/jwks",
+                                                 jwks_persistence_provider=None,
+                                                 asserted_iss=None)
+
+
+    result = app.pipeline(event=api_request_with_token(api_gateway_event_get, "bad_token"),
+                          context={},
+                          env=Env().env,
+                          params_parser=noop_callable,
+                          pip_initiator=pip_wrapper,
+                          handler_guard_fn=failed_token_expectation)
 
     assert result['statusCode'] == 401
 
@@ -215,9 +237,10 @@ def get_resource_protected_by_authz(request):
     request.status_code = app_value.HttpStatusCode(result.error().code)
     return monad.Left(request.replace('error', result.error()))
 
+
 @pdp.activity_pdp_decorator("a_service", "service:resource:domain1:action1", None, UnAuthorised)
 def get_authz_resource(request):
-    pass # because it will be unauthorised
+    pass  # because it will be unauthorised
 
 
 @app.route(pattern=('API', 'GET', '/resourceBase/resource/{id1}/resource/{id2}'))
@@ -237,8 +260,13 @@ def noop_callable(value):
     return monad.Right(value)
 
 
-def failed_expectations(value):
+def failed_env_expectations(value):
     return monad.Left(app.AppError(message="Env expectations failure", code=500))
+
+
+@pdp.token_pdp_decorator(name="a_service", error_cls=UnAuthorised)
+def failed_token_expectation(value):
+    return monad.Right(None)
 
 
 def dummy_request():
@@ -249,6 +277,12 @@ def pip_wrapper(request):
     request.pip = pip.pip(pip.PipConfig(), request)
     return monad.Right(request)
 
+
 def change_path_to_authz_fn(event):
     event['path'] = '/resourceBase/authz_resource/uuid1'
+    return event
+
+def api_request_with_token(event, token=None):
+    token_to_add = token if token else crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk)
+    event['headers']['Authorization'] = event['headers']['Authorization'].replace("{}", token_to_add)
     return event

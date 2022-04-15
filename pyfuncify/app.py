@@ -108,24 +108,28 @@ def pipeline(event: Dict,
     + handler_guard_fn: A pre-processing guard fn to determine whether the handler should be invoked.  It returns an Either.  When the handler
                         shouldnt run the Either wraps an Exception.  In this case, the request is passed directly to the responder
     """
-    guard_outcome = handler_guard_fn(event)
+
+    request = pip_initiator(build_value(event, context, env).value)
+
+    guard_outcome = handler_guard_fn(request)
 
     if guard_outcome.is_right():
-        result = run_pipeline(event=event,
-                              context=context,
-                              env=env,
-                              params_parser=params_parser,
-                              pip_initiator=pip_initiator)
+        result = run_pipeline(request=request,
+                              params_parser=params_parser)
     else:
-        result = monad.Left(build_value(event=event, context=context, env=env, error=guard_outcome.error()).value)
+        result = monad.Left(build_value(event=event,
+                                        context=context,
+                                        env=env,
+                                        status_code=app_value.HttpStatusCode(guard_outcome.error().code),
+                                        error=guard_outcome.error()).value)
     return responder(result)
 
 
-def run_pipeline(event: Dict, context: Dict, env: Any, params_parser: Callable, pip_initiator: Callable):
-    return build_value(event, context, env) >> log_start >> params_parser >> pip_initiator >> route_invoker
+def run_pipeline(request: monad.EitherMonad[app_value.Request], params_parser: Callable):
+    return request >> log_start >> params_parser >> route_invoker
 
 
-def build_value(event, context, env, error=None):
+def build_value(event, context, env, status_code: app_value.HttpStatusCode=None, error=None) -> monad.EitherMonad[app_value.Request]:
     """
     Initialises the app_value.Request object to be passed to the pipeline
     """
@@ -134,6 +138,7 @@ def build_value(event, context, env, error=None):
                             tracer=init_tracer(env=env, aws_context=context),
                             pip=None,
                             response=None,
+                            status_code=status_code,
                             error=error)
     return monad.Right(req)
 
