@@ -1,4 +1,4 @@
-from pyfuncify import fn, chronos
+from pyfuncify import fn, chronos, monad
 
 #
 # fn.identity
@@ -19,6 +19,20 @@ def it_composes_piped_fns():
     add1 = lambda x: x + 1
     assert(fn.compose_iter([add1, add1], 10) == 12)
 
+
+#
+# fn.either_compose
+#
+def it_either_composes_fns():
+    add1 = lambda x: monad.Right(x + 1)
+    assert fn.either_compose([add1, add1], monad.Right(10)) == monad.Right(12)
+
+def it_either_composes_until_a_left():
+    add1 = lambda x: monad.Right(x + 1)
+    failed = lambda x: monad.Left('boom!')
+    assert fn.either_compose([add1, failed, add1], monad.Right(10)) == monad.Left('boom!')
+
+
 #
 # fn.find_by_filter
 #
@@ -33,6 +47,14 @@ def it_returns_none_when_no_instances_found():
     res = fn.find_by_filter(predicate_fn, [1,2,3])
 
     assert not res
+
+#
+# Test Equality
+#
+def it_uses_the_equility_fn_to_find_in_list():
+    result = fn.find(fn.equality('a', "equal"),([{'a': "equal"}]))
+
+    assert result['a'] == 'equal'
 
 
 #

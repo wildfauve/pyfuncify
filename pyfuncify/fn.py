@@ -105,8 +105,8 @@ def select(fn: Callable, xs: List) -> filter:
 # + field_fn; the property to extract from the record.  Either a String or a Function which takes the record
 # + test_value; the value which has == applied to determine equality
 # + i; the record under test
-# e.g. equality.(:a).("equal").({a: "equal"})
-# e.g. equality.(test_fn).("equal").({a: "equal"})) ; where test_fn is -> x { x[:a] }
+# e.g. equality('a', "equal")({'a': "equal"})
+# e.g. equality.(test_fn).("equal")({'a': "equal"})) ; where test_fn is -> x { x[:a] }
 @curry(3)
 def equality(field_or_fn, test_value, i):
     if callable(field_or_fn):
@@ -148,6 +148,10 @@ def only_one(xs: List[Any]) -> bool:
 
 def compose_iter(fn_list: List, initial_val):
     return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val)).flush()
+
+
+def either_compose(fn_list: List, initial_val):
+    return reduce(lambda m, fn: m.bind(fn), fn_list, initial_val)
 
 def flatten(xs: List):
     return reduce(iconcat, xs, [])
