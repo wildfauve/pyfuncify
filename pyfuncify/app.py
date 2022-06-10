@@ -74,6 +74,8 @@ On Errors.  Remember when you want your handler to generate an error that is par
 DEFAULT_S3_BUCKET_SEP = "."
 DEFAULT_RESPONSE_HDRS = {'Content-Type': 'application/json'}
 
+NO_MATCHING_ROUTE = "no_matching_route"
+
 Request = app_value.Request
 RequestEvent = app_value.RequestEvent
 ApiGatewayRequestEvent = app_value.ApiGatewayRequestEvent
@@ -89,27 +91,30 @@ def route(pattern, opts=None):
     return app_route.route(pattern, opts)
 
 
-def pipeline(event: Dict, 
+def pipeline(event: Dict,
              context: Dict,
              env: str,
-             params_parser: Callable, 
-             pip_initiator: Callable, 
-             handler_guard_fn: Callable):
+             params_parser: Callable,
+             pip_initiator: Callable,
+             handler_guard_fn: Callable,
+             factory_overrides: Dict ={}):
     """
     Runs a general event handler pipeline.  Initiated by the main handler function.
 
-    It takes the Lambda Event and Context objects.  It builds a request object and invokes the handler based on the event context
-    and the routes provided by the handler via the @app.route decorator
+    It takes the Lambda Event and Context objects.  It builds a request object and invokes the handler based on the event
+    context and the routes provided by the handler via the @app.route decorator
 
 
     The main handler can then insert 3 functions to configure the pipeline:
-    + params_parser: Takes the request object optionally transforms it, and returns it wrapper in an Either.
-    + pip_initiator:  Policy Information Point
+    + params_parser: Mandatory.  Callable.  Takes the request object optionally transforms it, and returns it wrapper in an Either.
+    + pip_initiator:  Mandatory.  Callable.  Policy Information Point
+    + factory_overrides: Optional. Dict.  Overrides the routing factory token constructor.  Only supports S3 overrides.  For an
+                                          s3 override provide a Dict in the form of {'s3': callable_function}
     + handler_guard_fn: A pre-processing guard fn to determine whether the handler should be invoked.  It returns an Either.  When the handler
                         shouldnt run the Either wraps an Exception.  In this case, the request is passed directly to the responder
     """
 
-    request = pip_initiator(build_value(event, context, env).value)
+    request = pip_initiator(build_value(event, context, env, factory_overrides).value)
 
     guard_outcome = handler_guard_fn(request)
 
@@ -125,15 +130,21 @@ def pipeline(event: Dict,
     return responder(result)
 
 
-def run_pipeline(request: monad.EitherMonad[app_value.Request], params_parser: Callable):
+def run_pipeline(request: monad.EitherMonad[app_value.Request],
+                 params_parser: Callable):
     return request >> log_start >> params_parser >> route_invoker
 
 
-def build_value(event, context, env, status_code: app_value.HttpStatusCode=None, error=None) -> monad.EitherMonad[app_value.Request]:
+def build_value(event,
+                context,
+                env,
+                factory_overrides: Dict = {},
+                status_code: app_value.HttpStatusCode=None,
+                error=None) -> monad.EitherMonad[app_value.Request]:
     """
     Initialises the app_value.Request object to be passed to the pipeline
     """
-    req = app_value.Request(event=event_factory(event),
+    req = app_value.Request(event=event_factory(event, factory_overrides),
                             context=context,
                             tracer=init_tracer(env=env, aws_context=context),
                             pip=None,
@@ -142,27 +153,28 @@ def build_value(event, context, env, status_code: app_value.HttpStatusCode=None,
                             error=error)
     return monad.Right(req)
 
-def event_factory(event: Dict) -> app_value.RequestEvent:
+def event_factory(event: Dict, factory_overrides: Dict ={}) -> app_value.RequestEvent:
     if event.get('Records', None):
-        return build_s3_state_change_event(event)
+        return build_s3_state_change_event(event, factory_overrides)
     if event.get('httpMethod', None):
         return build_http_event(event)
     return build_noop_event(event)
 
 def build_noop_event(event: app_value.RequestEvent) -> app_value.RequestEvent:
-    template, route_fn, opts = route_fn_from_kind('no_matching_route')
+    template, route_fn, opts = route_fn_from_kind(NO_MATCHING_ROUTE)
     return app_value.NoopEvent(event=event,
                                kind=template,
                                request_function=route_fn)
 
-def build_s3_state_change_event(event: Dict) -> app_value.S3StateChangeEvent:
+def build_s3_state_change_event(event: Dict, factory_overrides: Dict) -> app_value.S3StateChangeEvent:
     objects = s3_objects_from_event(event)
-    kind = domain_from_bucket_name(objects)
+    factory = domain_from_bucket_name if not factory_overrides.get('s3', None) else factory_overrides.get('s3',None)
+    kind = factory(objects)
     template, route_fn, _opts = route_fn_from_kind(kind)
     return app_value.S3StateChangeEvent(event=event,
                                         kind=kind,
                                         request_function=route_fn,
-                                        objects = objects)
+                                        objects=objects)
 
 def build_http_event(event: Dict) -> app_value.ApiGatewayRequestEvent:
     """
@@ -213,7 +225,7 @@ def s3_objects_from_event(s3_event: Dict) -> List[Dict]:
 def domain_from_bucket_name(objects: List[app_value.S3Object]) -> str:
     domain = {object.bucket for object in objects}
     if len(domain) > 1:
-        return 'no_matching_route'
+        return NO_MATCHING_ROUTE
     return domain.pop().split(DEFAULT_S3_BUCKET_SEP)[0]
 
 

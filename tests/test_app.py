@@ -170,10 +170,19 @@ def it_parses_the_json_body(api_gateway_event_post_with_json_body):
 #
 
 def it_identifies_an_s3_event(s3_event_hello):
-    event = app.event_factory(s3_event_hello)
+    event = app.event_factory(event=s3_event_hello)
 
     assert isinstance(event, app.S3StateChangeEvent)
     assert event.kind == 'hello'
+    assert len(event.objects) == 1
+    assert event.objects[0].bucket == 'hello'
+    assert event.objects[0].key == 'hello_file.json'
+
+def it_identifies_an_s3_event_using_custom_factory(s3_event_hello):
+    event = app.event_factory(event=s3_event_hello, factory_overrides={'s3': overrided_s3_factory})
+
+    assert isinstance(event, app.S3StateChangeEvent)
+    assert event.kind == 'bonjour'
     assert len(event.objects) == 1
     assert event.objects[0].bucket == 'hello'
     assert event.objects[0].key == 'hello_file.json'
@@ -213,9 +222,20 @@ def set_up_mock_idp():
 # Helpers
 #
 
+def overrided_s3_factory(objects: List[app_value.S3Object]) -> str:
+    domain = {object.bucket for object in objects}
+    if len(domain) > 1:
+        return app.NO_MATCHING_ROUTE
+    return 'bonjour'
+
+
 @app.route(pattern="hello")
 def hello_handler(request):
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'hello': 'there'}))))
+
+@app.route(pattern="bonjour")
+def bonjour_handler(request):
+    return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'bonjour': 'there'}))))
 
 
 @app.route(pattern="no_matching_route")

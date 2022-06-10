@@ -119,6 +119,7 @@ def equality(field_or_fn, test_value, i):
 def at(x, i):
     if x is None:
         return None
+
     elif x not in i:
         return None
     else:
