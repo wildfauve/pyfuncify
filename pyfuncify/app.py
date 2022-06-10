@@ -12,6 +12,7 @@ from . import (monad,
                app_route,
                app_web_session,
                singleton,
+               chronos,
                app_serialisers)
 
 """
@@ -87,6 +88,7 @@ DictToJsonSerialiser = app_serialisers.DictToJsonSerialiser
 
 AppError = app_value.AppError
 
+
 def route(pattern, opts=None):
     return app_route.route(pattern, opts)
 
@@ -97,7 +99,7 @@ def pipeline(event: Dict,
              params_parser: Callable,
              pip_initiator: Callable,
              handler_guard_fn: Callable,
-             factory_overrides: Dict ={}):
+             factory_overrides: Dict = {}):
     """
     Runs a general event handler pipeline.  Initiated by the main handler function.
 
@@ -139,7 +141,7 @@ def build_value(event,
                 context,
                 env,
                 factory_overrides: Dict = {},
-                status_code: app_value.HttpStatusCode=None,
+                status_code: app_value.HttpStatusCode = None,
                 error=None) -> monad.EitherMonad[app_value.Request]:
     """
     Initialises the app_value.Request object to be passed to the pipeline
@@ -147,18 +149,21 @@ def build_value(event,
     req = app_value.Request(event=event_factory(event, factory_overrides),
                             context=context,
                             tracer=init_tracer(env=env, aws_context=context),
+                            event_time=chronos.time_now(tz=chronos.tz_utc()),
                             pip=None,
                             response=None,
                             status_code=status_code,
                             error=error)
     return monad.Right(req)
 
-def event_factory(event: Dict, factory_overrides: Dict ={}) -> app_value.RequestEvent:
+
+def event_factory(event: Dict, factory_overrides: Dict = {}) -> app_value.RequestEvent:
     if event.get('Records', None):
         return build_s3_state_change_event(event, factory_overrides)
     if event.get('httpMethod', None):
         return build_http_event(event)
     return build_noop_event(event)
+
 
 def build_noop_event(event: app_value.RequestEvent) -> app_value.RequestEvent:
     template, route_fn, opts = route_fn_from_kind(NO_MATCHING_ROUTE)
@@ -166,15 +171,17 @@ def build_noop_event(event: app_value.RequestEvent) -> app_value.RequestEvent:
                                kind=template,
                                request_function=route_fn)
 
+
 def build_s3_state_change_event(event: Dict, factory_overrides: Dict) -> app_value.S3StateChangeEvent:
     objects = s3_objects_from_event(event)
-    factory = domain_from_bucket_name if not factory_overrides.get('s3', None) else factory_overrides.get('s3',None)
+    factory = domain_from_bucket_name if not factory_overrides.get('s3', None) else factory_overrides.get('s3', None)
     kind = factory(objects)
     template, route_fn, _opts = route_fn_from_kind(kind)
     return app_value.S3StateChangeEvent(event=event,
                                         kind=kind,
                                         request_function=route_fn,
                                         objects=objects)
+
 
 def build_http_event(event: Dict) -> app_value.ApiGatewayRequestEvent:
     """
@@ -196,16 +203,20 @@ def build_http_event(event: Dict) -> app_value.ApiGatewayRequestEvent:
                                             path_params=path_template_to_params(kind[2], template[2]),
                                             body=body,
                                             query_params=event['queryStringParameters'],
-                                            web_session=app_web_session.WebSession().session_from_headers(event['headers']))
+                                            web_session=app_web_session.WebSession().session_from_headers(
+                                                event['headers']))
+
 
 def route_from_http_event(method, path):
     return ('API', method, path)
+
 
 def path_template_to_params(kind, template) -> Dict:
     """
     Remove the leading "/"
     """
     return params_comparer_builder(kind[1::].split("/"), template[1::].split("/"), {})
+
 
 def params_comparer_builder(kind_xs, template_xs, injector):
     template_fst, template_rst = fn.first(template_xs), fn.rest(template_xs)
@@ -222,6 +233,7 @@ def params_comparer_builder(kind_xs, template_xs, injector):
 def s3_objects_from_event(s3_event: Dict) -> List[Dict]:
     return [s3_object(record) for record in s3_event['Records']]
 
+
 def domain_from_bucket_name(objects: List[app_value.S3Object]) -> str:
     domain = {object.bucket for object in objects}
     if len(domain) > 1:
@@ -233,8 +245,10 @@ def s3_object(record: Dict) -> app_value.S3Object:
     return app_value.S3Object(bucket=fn.deep_get(record, ['s3', 'bucket', 'name']),
                               key=fn.deep_get(record, ['s3', 'object', 'key']))
 
+
 def route_invoker(request):
     return request.event.request_function(request=request)
+
 
 def route_fn_from_kind(kind):
     """
@@ -254,8 +268,10 @@ def log_start(request):
                ctx={'event': event_kind_to_log_ctx(request)})
     return monad.Right(request)
 
+
 def event_kind_to_log_ctx(request: app_value.Request) -> str:
     return "{event_type}:{kind}".format(event_type=type(request.event).__name__, kind=request.event.kind)
+
 
 def responder(request):
     """
@@ -291,8 +307,10 @@ def responder(request):
 
     return body
 
-def build_headers(hdrs: Dict)-> Dict:
+
+def build_headers(hdrs: Dict) -> Dict:
     return {**hdrs, **DEFAULT_RESPONSE_HDRS} if hdrs else DEFAULT_RESPONSE_HDRS
+
 
 def build_multi_headers(event: app_value.RequestEvent) -> Dict:
     """
@@ -301,6 +319,7 @@ def build_multi_headers(event: app_value.RequestEvent) -> Dict:
     if event.returnable_session_state() and event.web_session:
         return event.web_session.serialise_state_as_multi_header()
     return {}
+
 
 def init_tracer(env: str, aws_context=None):
     aws_request_id = aws_context.aws_request_id if aws_context else None

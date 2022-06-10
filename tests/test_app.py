@@ -101,11 +101,9 @@ def it_returns_a_invalid_token_401_unauthorised(set_up_env,
                                                 api_gateway_event_get,
                                                 set_up_mock_idp,
                                                 jwks_mock):
-
     subject_token.SubjectTokenConfig().configure(jwks_endpoint="https://idp.example.com/.well-known/jwks",
                                                  jwks_persistence_provider=None,
                                                  asserted_iss=None)
-
 
     result = app.pipeline(event=api_request_with_token(api_gateway_event_get, "bad_token"),
                           context={},
@@ -169,6 +167,13 @@ def it_parses_the_json_body(api_gateway_event_post_with_json_body):
 # Request Builder Functions
 #
 
+def it_includes_a_time_in_the_request(api_gateway_event_get):
+    request = app.build_value(event=api_gateway_event_get,
+                              context={},
+                              env=Env().env)
+    assert isinstance(request.value.event_time, datetime.datetime)
+
+
 def it_identifies_an_s3_event(s3_event_hello):
     event = app.event_factory(event=s3_event_hello)
 
@@ -177,6 +182,7 @@ def it_identifies_an_s3_event(s3_event_hello):
     assert len(event.objects) == 1
     assert event.objects[0].bucket == 'hello'
     assert event.objects[0].key == 'hello_file.json'
+
 
 def it_identifies_an_s3_event_using_custom_factory(s3_event_hello):
     event = app.event_factory(event=s3_event_hello, factory_overrides={'s3': overrided_s3_factory})
@@ -232,6 +238,7 @@ def overrided_s3_factory(objects: List[app_value.S3Object]) -> str:
 @app.route(pattern="hello")
 def hello_handler(request):
     return monad.Right(request.replace('response', monad.Right(app.DictToJsonSerialiser({'hello': 'there'}))))
+
 
 @app.route(pattern="bonjour")
 def bonjour_handler(request):
@@ -301,6 +308,7 @@ def pip_wrapper(request):
 def change_path_to_authz_fn(event):
     event['path'] = '/resourceBase/authz_resource/uuid1'
     return event
+
 
 def api_request_with_token(event, token=None):
     token_to_add = token if token else crypto_helpers.generate_signed_jwt(crypto_helpers.Idp().jwk)

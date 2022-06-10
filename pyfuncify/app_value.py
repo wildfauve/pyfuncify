@@ -72,6 +72,8 @@ class Request(DataClassAbstract):
     event: RequestEvent
     context: dict
     tracer: tracer.Tracer
+    event_time: datetime = None
+    app_request_context: Dict = None
     status_code: Optional[HttpStatusCode] = None
     request_handler: Optional[Callable] = None
     pip: Optional[dict] = None
