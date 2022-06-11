@@ -27,7 +27,7 @@ class SpanTracer():
         return str(uu_id) if isinstance(uu_id, uuid.UUID) else uu_id
 
     def aws_request_id(self):
-        return self.aws_context.aws_request_id if self.aws_context else None
+        return self.kv.get('handler_id', None)
 
 
 def init_tracing(env):
