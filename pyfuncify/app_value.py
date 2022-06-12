@@ -89,3 +89,6 @@ class AppError(error.PyFuncifyBaseError):
 
     def error(self):
         return type(self).dict_to_json_serialiser()(super().error())
+
+    def as_dict(self):
+        return super(type(self), self).error()
