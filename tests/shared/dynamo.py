@@ -1,10 +1,10 @@
 import pytest
-from moto import mock_dynamodb2
+from moto import mock_aws
 
 @pytest.fixture
 def dynamo_mock_empty():
-
-    mock_dynamodb2().start()
+    mock = mock_aws()
+    mock.start()
 
     from . base_model import BaseModel
 
@@ -13,4 +13,4 @@ def dynamo_mock_empty():
 
     yield BaseModel
 
-    mock_dynamodb2().stop()
+    mock.stop()

@@ -1,6 +1,6 @@
+from dataclasses import dataclass
 from typing import Protocol, Any, List
 from pymonad.tools import curry
-from attrs import define, field
 
 from . import subject_token, monad, crypto, fn
 """
@@ -24,7 +24,7 @@ The wrapper must add the generated PIP to the request.pip property.  For example
 
 """
 
-@define
+@dataclass
 class PipConfig:
     validate_id_token: bool = True
     userinfo: bool = False
@@ -45,7 +45,7 @@ class UserinfoStateProtocol(Protocol):
         ...
 
 
-@define
+@dataclass
 class Pip:
     id_token: monad.EitherMonad[crypto.IdToken] = None
     subject: monad.EitherMonad[UserinfoStateProtocol] = None

@@ -4,10 +4,9 @@ from pymonad.maybe import *
 from pymonad.tools import curry
 # from pymonad.list import *
 from pymonad.reader import Pipe
-from functools import reduce
+from functools import reduce, partial
 from operator import iconcat
 import re
-from mini_lambda import x, _
 
 import collections.abc
 
@@ -80,8 +79,7 @@ def find_by_predicate(predicate_fn: Callable, iterable: List):
     return partial_filter(predicate_fn, iterable).then(partial_first)
 
 def type_predicate(type):
-    # return lambda x: x['_type'] == type
-    return _(x['_type'] == type)
+    return lambda x: x['_type'] == type
 
 def partial_filter(fn: Callable, iterable: List):
     return Just(list(filter(fn, iterable)))
@@ -89,7 +87,6 @@ def partial_filter(fn: Callable, iterable: List):
 def find_by_filter(fn, xs):
     return next(filter(fn, xs), None)
 
-@curry(2)
 def find(fn, xs):
     """
     fn.find(fn.equality(fn.at('a')), '1', [{'a': '1'}])
@@ -125,21 +122,19 @@ def at(x, i):
     else:
         return i[x]
 
-@curry(2)
 def match(pattern, test_string):
     return re.match(pattern, test_string)
 
 # Curryed fn that removes elements from a collection where f.(e) is true
 @curry(2)
 def remove(fn: Callable, xs: List) -> List:
-    return list(filter(negated_fn(fn), xs))
+    return list(filter(partial(negated_fn,fn), xs))
 
-@curry(2)
 def negated_fn(fn: Callable, x):
     return not fn(x)
 
 def remove_none(xs):
-    return list(filter(_(x), xs))
+    return list(filter(identity, xs))
 
 def not_empty(xs: List[Any]) -> bool:
     return len(xs) > 0

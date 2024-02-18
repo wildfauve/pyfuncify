@@ -25,7 +25,7 @@ def valid_state_transition(state_map: StateTransitionMap, from_state: str, with_
            .then(fn.only_one)
            .flush())
 
-def transition(state_map: StateTransitionMap, from_state: str, with_transition: str) -> str:
+def transition(state_map: StateTransitionMap, from_state: str, with_transition: str) -> monad.EitherMonad[str]:
     return (Pipe(state_map)
            .then(map_selector(extract_from_state_and_transition, (from_state, with_transition, None)))
            .then(list)
@@ -35,7 +35,7 @@ def transition(state_map: StateTransitionMap, from_state: str, with_transition: 
 
 @curry(3)
 def map_selector(extractor_fn: Callable, map_tester: Tuple, state_map: StateTransitionMap) -> filter:
-    return fn.select(fn.equality(extractor_fn, map_tester), state_map.map)
+    return fn.select(fn.equality(extractor_fn, map_tester), state_map.stmap)
 
 def validate_and_extract_new_state(state_map_items: List[Tuple[str, str, str]]) -> str:
     if fn.only_one(state_map_items):
