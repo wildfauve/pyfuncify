@@ -1,7 +1,7 @@
+from typing import List, Self
+import traceback
 from pymonad.operators.either import Either
-from typing import Any, TypeVar, Callable, Union, Any, Generic
-
-from .logger import logger
+from typing import TypeVar, Callable, Union, Any, Generic
 
 T = TypeVar('T')
 
@@ -11,6 +11,7 @@ class EitherMonad(Generic[T]):
 
 
 class MEither(Either):
+
     def __or__(self, fns):
         """
         Acts as a Monadic OR, determining the function to execute based on the Either.
@@ -18,7 +19,7 @@ class MEither(Either):
         """
         return self.either(fns[0], fns[1])
 
-    # Lifts the either; returning the wrapped value regardless of Left or Right
+    # Lifts the Either; returning the wrapped value regardless of Left or Right
     def lift(self):
         return self.value if self.is_right() else self.monoid[0]
 
@@ -26,12 +27,12 @@ class MEither(Either):
         return self.monoid[0]
 
 
-def Left(value: Either) -> Either[T, T]:  # pylint: disable=invalid-name
+def Left(value: Either[T, T]) -> Either[T, T]:  # pylint: disable=invalid-name
     """ Creates a value of the first possible type in the Either monad. """
     return MEither(None, (value, False))
 
 
-def Right(value: Either) -> Either[T, T]:  # pylint: disable=invalid-name
+def Right(value: Either[T, T]) -> Either[T, T]:  # pylint: disable=invalid-name
     """ Creates a value of the second possible type in the Either monad. """
     return MEither(value, (None, True))
 
@@ -80,8 +81,9 @@ def monadic_try(name: str = None,
 
                 error_result = Left(ex_cls(message=str(e),
                                            name=(kwargs.get('name', None) or name or fn.__name__),
-                                           code=status, klass=str(e.__class__))) if ex_cls else Left(str(e))
-                
+                                           code=status, klass=str(e.__class__),
+                                           traceback=traceback.format_exc())) if ex_cls else Left(str(e))
+
                 return_fn = kwargs.get('error_result_fn', error_result_fn)
                 if not return_fn:
                     return error_result
@@ -94,5 +96,48 @@ def monadic_try(name: str = None,
     return inner
 
 
+def aio_monadic_try(name: str = None,
+                    status: int = None,
+                    exception_test_fn: Callable[[Either], Either] = None,
+                    error_cls: Any = None,
+                    error_result_fn: Callable = None):
+    def inner(f):
+        async def try_it(*args, **kwargs):
+            try:
+                result = Right(await f(*args, **kwargs))
+                test_fn = kwargs.get('exception_test_fn', exception_test_fn)
+                return test_fn(result) if test_fn else result
+            except Exception as e:
+                ex_cls = kwargs.get('error_cls', None) or error_cls
+
+                error_result = Left(ex_cls(message=str(e),
+                                           name=(kwargs.get('name', None) or name or f.__name__),
+                                           code=status, klass=str(e.__class__),
+                                           request_kwargs=kwargs,
+                                           traceback=traceback.format_exc())) if ex_cls else Left(str(e))
+
+                return_fn = kwargs.get('error_result_fn', error_result_fn)
+                if not return_fn:
+                    return error_result
+
+                injected_arg = kwargs.get('error_result_fn_arg', None)
+                return return_fn(injected_arg, error_result)
+
+        return try_it
+
+    return inner
+
+
+Try = monadic_try
+
+AIOTry = aio_monadic_try
+
+
 def any_error(try_result: Either) -> Union[str, None]:
     return try_result.either(lambda res: str(res.error()), lambda res: None)
+
+
+def either_to_status(monad: EitherMonad):
+    if not isinstance(monad, MEither):
+        return "ok"
+    return "ok" if monad.is_right() else "fail"
