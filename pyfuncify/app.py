@@ -294,7 +294,7 @@ def responder(request):
     elif request.is_right() and request.value.response.is_left():
         # When the processing pipeline completes successfully but the response Dict is a failure
         body['statusCode'] = request.value.status_code.value if request.value.status_code else 200
-        body['body'] = request.value.response.error().serialise()
+        body['body'] = request.value.response.error().error().serialise()
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.

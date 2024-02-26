@@ -92,3 +92,6 @@ class AppError(error.PyFuncifyBaseError):
 
     def as_dict(self):
         return super(type(self), self).error()
+
+    def serialise(self):
+        return self.error().serialise()
