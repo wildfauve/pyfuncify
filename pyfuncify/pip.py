@@ -1,5 +1,5 @@
-from dataclasses import dataclass
-from typing import Protocol, Any, List
+from dataclasses import dataclass, field
+from typing import Protocol, Any, List, Optional
 from pymonad.tools import curry
 
 from . import subject_token, monad, crypto, fn
@@ -29,6 +29,7 @@ class PipConfig:
     validate_id_token: bool = True
     userinfo: bool = False
     userinfo_get_fn: callable = None
+    parse_generate_id_token_fn: Optional[callable] = field(default_factory=lambda: subject_token.parse_generate_id_token)
 
     def execute_userinfo_get(self):
         return self.userinfo and self.userinfo_get_fn
@@ -75,7 +76,7 @@ def userinfo(config, pip):
 
     return pip
 
-def jwt_parser(config, request):
+def jwt_parser(config, request) -> monad.Either[Any, crypto.IdToken]:
     if config.validate_id_token:
-        return subject_token.parse_generate_id_token(subject_token.parse_bearer_token(request.event.headers))
+        return config.parse_generate_id_token_fn(subject_token.parse_bearer_token(request.event.headers))
     return None

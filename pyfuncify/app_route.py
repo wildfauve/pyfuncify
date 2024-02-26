@@ -1,7 +1,8 @@
 from typing import Optional, Dict, Any, List, Callable, Union, Tuple
 from pymonad.tools import curry
 
-from . import singleton, fn
+from . import singleton, fn, monad
+
 
 class RouteMap(singleton.Singleton):
     routes = {}
@@ -11,9 +12,15 @@ class RouteMap(singleton.Singleton):
         pass
 
     def no_route(self, return_template=False) -> Union[Callable, Tuple[str, Callable]]:
+        no_route_route = self.routes.get('no_matching_route', None)
+        if not no_route_route:
+            no_route_route = (self.default_no_route, None)
         if return_template:
-            return 'no_matching_routes', self.routes.get('no_matching_route', None), None
-        return self.routes.get('no_matching_route', None)
+            return 'no_matching_routes', no_route_route[0], no_route_route[1]
+        return no_route_route
+
+    def default_no_route(self, request):
+        return monad.Left(request.replace('error', app.AppError(message='no matching route', code=404)))
 
     def get_route(self, route: Union[str, Tuple]) -> Tuple[Union[str, Tuple], Callable]:
         if isinstance(route, str):
