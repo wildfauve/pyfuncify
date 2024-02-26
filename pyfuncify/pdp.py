@@ -57,7 +57,7 @@ def pdp_decorator(name: str,
             results = fn.compose_iter(pdps, pdp_value(pip, name, ctx, namespace, pip.subject.value.activities(), []))
 
             if all(results.decisions):
-                return monad.Right(f(*args, **kwargs))
+                return f(*args, **kwargs)
             else:
                 return monad.Left(error_cls(message="Unauthorised",
                                             name=name,
@@ -91,7 +91,7 @@ def token_pdp_decorator(name: str,
             result = pdp(pdp_value(pip, name, ctx, namespace, pip.subject_activities(), []))
 
             if all(result.decisions):
-                return monad.Right(fn(*args, **kwargs))
+                return fn(*args, **kwargs)
             else:
                 return monad.Left(error_cls(message="Unauthorised",
                                             name=name,
@@ -150,7 +150,7 @@ def activity_pdp_decorator(name: str,
 
 
             if all(result.decisions):
-                return monad.Right(fn(*args, **kwargs))
+                return fn(*args, **kwargs)
             else:
                 return monad.Left(error_cls(message="Unauthorised",
                                             name=name,

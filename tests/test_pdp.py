@@ -87,7 +87,7 @@ def failed_userinfo_get():
 
 @pdp.activity_pdp_decorator("a_service", "service:resource:domain1:action1", "service", UnAuthorised)
 def call_the_service(pip: pip.Pip) -> monad.MEither:
-    return "called_successfully"
+    return monad.Right("called_successfully")
 
 
 @pdp.pdp_decorator(name="a_service",
@@ -96,17 +96,17 @@ def call_the_service(pip: pip.Pip) -> monad.MEither:
                    pdps=[pdp.token_pdp, pdp.activity_pdp],
                    error_cls=UnAuthorised)
 def call_the_service_composed_authz(pip: pip.Pip) -> monad.MEither:
-    return "called_successfully"
+    return monad.Right("called_successfully")
 
 
 @pdp.activity_pdp_decorator("a_service", "service:resource:domain1:action1", None, UnAuthorised)
 def call_the_service_without_namespace(pip: pip.Pip) -> monad.MEither:
-    return "called_successfully"
+    return monad.Right("called_successfully")
 
 
 @pdp.token_pdp_decorator(name="a_service", error_cls=UnAuthorised)
 def call_the_service_with_token_validation(pip: pip.Pip) -> monad.MEither:
-    return "called_successfully"
+    return monad.Right("called_successfully")
 
 
 def userinfo_mock(activities):
