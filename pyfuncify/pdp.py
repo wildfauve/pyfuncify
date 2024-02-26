@@ -2,7 +2,7 @@ from typing import Callable, Any, Optional, List
 from pymonad.tools import curry
 from collections import namedtuple
 
-from . import monad, fn
+from . import monad, fn, pip, app
 
 activity_token = ":"
 
@@ -48,7 +48,7 @@ def pdp_decorator(name: str,
 
     def inner(f):
         def invoke(*args, **kwargs):
-            pip = kwargs.get('pip', None)
+            pip = _get_pip(args, kwargs)
             if pip is None:
                 return monad.Left(error_cls(message="Unauthorised",
                                             name=name,
@@ -82,7 +82,7 @@ def token_pdp_decorator(name: str,
 
     def inner(fn):
         def invoke(*args, **kwargs):
-            pip = kwargs.get('pip', None)
+            pip = _get_pip(args, kwargs)
             if pip is None or pip.id_token is None:
                 return monad.Left(error_cls(message="Unauthorised",
                                             name=name,
@@ -101,6 +101,16 @@ def token_pdp_decorator(name: str,
 
     return inner
 
+def _get_pip(args, kwargs):
+    if args and isinstance(args[0], pip.Pip):
+        return args[0]
+    if (pip_from_kw:=kwargs.get('pip', None)):
+        return pip_from_kw
+    if args and isinstance(args[0], app.Request):
+        return args[0].pip
+    if (req_from_kw:=kwargs.get('request', None)):
+        return req_from_kw.pip
+    return None
 
 
 def activity_pdp_decorator(name: str,
