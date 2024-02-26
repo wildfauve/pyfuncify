@@ -1,19 +1,17 @@
-from typing import Optional, List, Dict, Tuple, Callable, Any, Union, Protocol
+from typing import List, Dict, Tuple, Callable, Union
 
-from pymonad.tools import curry
-import json
 from . import (monad,
                span_tracer,
                logger,
                fn,
-               tracer,
-               error,
                app_value,
                app_route,
                app_web_session,
-               singleton,
                chronos,
                app_serialisers)
+
+DEFAULT_SUCCESS_HTTP_CODE = 200
+DEFAULT_FAILURE_HTTP_CODE = 400
 
 """
 App provides a number of helpers to build a Lambda event handling pipeline.  
@@ -293,12 +291,12 @@ def responder(request):
         status = 'ok'
     elif request.is_right() and request.value.response.is_left():
         # When the processing pipeline completes successfully but the response Dict is a failure
-        body['statusCode'] = request.value.status_code.value if request.value.status_code else 200
+        body['statusCode'] = _error_status_code(request.value)
         body['body'] = request.value.response.error().error().serialise()
         status = 'fail'
     else:
         # When the processing pipeline fails, with the error in the 'error' property of the request.
-        body['statusCode'] = request.error().status_code.value if request.error().status_code else 400
+        body['statusCode'] = request.error().status_code.value if request.error().status_code else DEFAULT_FAILURE_HTTP_CODE
         body['body'] = request.error().error.error().serialise()
         status = 'fail'
 
@@ -306,6 +304,12 @@ def responder(request):
 
     return body
 
+def _error_status_code(request: Request):
+    if isinstance(request.response, monad.MEither) and request.response.is_left():
+        return request.response.error().code
+    if request.status_code:
+        return request.status_code
+    return DEFAULT_SUCCESS_HTTP_CODE
 
 def build_headers(hdrs: Dict) -> Dict:
     return {**hdrs, **DEFAULT_RESPONSE_HDRS} if hdrs else DEFAULT_RESPONSE_HDRS
