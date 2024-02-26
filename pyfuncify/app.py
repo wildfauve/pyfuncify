@@ -262,10 +262,9 @@ def template_from_route_fn(route_fn: Callable) -> Union[str, Tuple]:
 
 
 def log_start(request):
-    logger.log(level='info',
-               msg='Start Handler',
-               tracer=request.tracer,
-               ctx={'event': event_kind_to_log_ctx(request)})
+    logger.info(msg='Start Handler',
+                tracer=request.tracer,
+                ctx={'event': event_kind_to_log_ctx(request)})
     return monad.Right(request)
 
 
@@ -303,7 +302,7 @@ def responder(request):
         body['body'] = request.error().error.error().serialise()
         status = 'fail'
 
-    logger.log(level='info', msg="End Handler", tracer=request.lift().tracer, ctx={}, status=status)
+    logger.info(msg="End Handler", tracer=request.lift().tracer, ctx={}, status=status)
 
     return body
 

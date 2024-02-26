@@ -7,12 +7,12 @@ from .tracer import Tracer
 expected_envs = ['client_id',
                  'client_secret']
 
-
 token_cache = GLOBAL_CACHE.MemoryCachedVar('token_cache')
 
-BEARER_TOKEN = "BEARER_TOKEN"               # Name of bearer token in PS
+BEARER_TOKEN = "BEARER_TOKEN"  # Name of bearer token in PS
 
 _CTX = {}
+
 
 class Error(Exception):
     def __init__(self, message="", name="", ctx={}, code=500, klass="", retryable=False):
@@ -34,8 +34,10 @@ class Error(Exception):
 class TokenError(Error):
     pass
 
+
 class TokenEnvError(Error):
     pass
+
 
 class TokenPersistenceProviderProtocol(Protocol):
 
@@ -64,10 +66,11 @@ The token config is setup by the library caller to provide 4 arguments:
                  competing lambdas from obtaining the token at the same time).
 + expiry_threshold. Int in seconds.  The number of seconds before the token expires that it will be refreshed.
 """
-class TokenConfig(singleton.Singleton):
 
-    default_window_width        = (60*60)  # chance of refreshing token within 1 hour band
-    default_expiry_threshold    = (60*60)  # The room to leave before the actual token expiry
+
+class TokenConfig(singleton.Singleton):
+    default_window_width = (60 * 60)  # chance of refreshing token within 1 hour band
+    default_expiry_threshold = (60 * 60)  # The room to leave before the actual token expiry
 
     def configure(self,
                   token_persistence_provider: TokenPersistenceProviderProtocol,
@@ -83,19 +86,19 @@ class TokenConfig(singleton.Singleton):
         pass
 
 
-def token(tracer: Tracer=None):
+def token(tracer: Tracer = None):
     _CTX['tracer'] = tracer
     if not env_set_up(TokenConfig().env):
         return monad.Left(TokenEnvError(message="Token can not the retrieved due to a failure in env setup"))
     result = get()
     if result.is_right() and (result.value.expired() or in_token_retry_window(result.value)):
-        logger.log(level='info',
-                   msg='Self Token Cache Miss',
-                   ctx={'expired': result.value.expired(), 'in_window': in_token_retry_window(result.value)},
-                   tracer=tracer_from_ctx())
+        logger.info(msg='Self Token Cache Miss',
+                    ctx={'expired': result.value.expired(), 'in_window': in_token_retry_window(result.value)},
+                    tracer=tracer_from_ctx())
         invalidate_cache()
         return get()
     return result
+
 
 def get():
     result = cacheable_token()
@@ -104,12 +107,15 @@ def get():
     else:
         return result
 
+
 def cacheable_token():
     return token_cache.get()
+
 
 def invalidate_cache():
     token_cache.invalidate()
     pass
+
 
 @token_cache.on_first_access
 def get_token():
@@ -133,13 +139,13 @@ def get_token():
     else:
         return result
 
+
 def token_service(bearer_token):
     if bearer_token and crypto.bearer_token_valid(bearer_token) and not_in_token_retry_window(bearer_token):
         if bearer_token_from_env().value is None:
             return monad.Right(('from_cache', bearer_token))
         else:
             return monad.Right(('from_env', bearer_token))
-
 
     if bearer_token:
         not_in_wind = not_in_token_retry_window(bearer_token)
@@ -148,12 +154,11 @@ def token_service(bearer_token):
         not_in_wind = None
         token_state = ("No Token", "No Exp")
 
-    logger.log(level='info',
-               msg='Self Token Expired or not in Window',
-               ctx={'valid': token_state[0],
-                    'exp': token_state[1],
-                    'in_window': not_in_wind},
-               tracer=tracer_from_ctx())
+    logger.info(msg='Self Token Expired or not in Window',
+                ctx={'valid': token_state[0],
+                     'exp': token_state[1],
+                     'in_window': not_in_wind},
+                tracer=tracer_from_ctx())
 
     result = http_adapter.post(endpoint=identity_token_endpoint(),
                                auth=(client_id(), client_secret()),
@@ -163,13 +168,16 @@ def token_service(bearer_token):
                                name='token_service',
                                circuit_state_provider=TokenConfig().circuit_state_provider)
 
-    return monad.Right(('from_grant', result.value[1]['access_token'])) if result.is_right() else monad.Left(build_token_error(result.error()))
+    return monad.Right(('from_grant', result.value[1]['access_token'])) if result.is_right() else monad.Left(
+        build_token_error(result.error()))
+
 
 def from_cache(bearer_token):
     result = cache_reader(TokenConfig().token_persistence_provider)
     if result is None or result.is_left():
         return monad.Right(bearer_token)
     return monad.Right(result.value.value)
+
 
 def cache(bearer_token_tuple: Tuple[str, str]) -> monad.MEither:
     """
@@ -188,6 +196,7 @@ def cache(bearer_token_tuple: Tuple[str, str]) -> monad.MEither:
     TokenConfig().env.set_env_var_with_value(BEARER_TOKEN, bearer_token)
     return result
 
+
 def cache_reader(provider: Callable):
     if not hasattr(provider, 'read'):
         return None
@@ -200,20 +209,26 @@ def cache_writer(provider: Callable, bearer_token: str) -> monad.MEither:
         return monad.Right(('ok', BEARER_TOKEN, bearer_token))
     return result
 
+
 def client_id() -> str:
     return TokenConfig().env.client_id()
+
 
 def client_secret() -> str:
     return TokenConfig().env.client_secret()
 
+
 def identity_token_endpoint() -> str:
     return TokenConfig().env.identity_token_endpoint()
+
 
 def bearer_token_from_env():
     return monad.Right(TokenConfig().env.bearer_token())
 
+
 def token_request_data():
     return {'audience': 'https://api.jarden.io', 'grant_type': 'client_credentials', 'scopes': 'openid'}
+
 
 def not_in_token_retry_window(bearer_token: str) -> bool:
     id_token = crypto.parse_generate_id_token(bearer_token)
@@ -221,10 +236,12 @@ def not_in_token_retry_window(bearer_token: str) -> bool:
                                               end=id_token.value.exp() - TokenConfig().expiry_threshold,
                                               at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
 
+
 def in_token_retry_window(id_token):
     return random_retry_window.in_window(width=TokenConfig().window_width,
                                          end=id_token.exp() - TokenConfig().expiry_threshold,
                                          at=int(chronos.time_now(tz=chronos.tz_utc(), apply=[chronos.epoch()])))
+
 
 def build_token_error(result):
     return TokenError(message=result.message,
@@ -232,8 +249,10 @@ def build_token_error(result):
                       ctx=result.ctx,
                       code=result.code, retryable=False)
 
+
 def env_set_up(env):
     return all(getattr(env, var)() for var in expected_envs)
+
 
 def tracer_from_ctx():
     return _CTX['tracer']
