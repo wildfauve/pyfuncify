@@ -37,6 +37,10 @@ def Right(value: Either[T, T]) -> Either[T, T]:  # pylint: disable=invalid-name
     return MEither(value, (None, True))
 
 
+def Lift(value: Either[T, T]) -> T:  # pylint: disable=invalid-name
+    return value.value if value.is_right() else value.error()
+
+
 def maybe_value_ok(value: Either) -> bool:
     return value.is_right()
 

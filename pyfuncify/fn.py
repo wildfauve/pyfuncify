@@ -142,6 +142,15 @@ def not_empty(xs: List[Any]) -> bool:
 def only_one(xs: List[Any]) -> bool:
     return len(xs) == 1
 
+def bool_fn_with_predicate(xs, bool_fn, predicate):
+    """
+    Applies a bool fn over a list which is converted to bool through the predicate.
+    The bool_fn can be anything which works with a list[bool]; like any, all
+    > bool_fn_with_predicate([monad.Right(1), monad.Left(2)], any, monad.maybe_value.ok)
+    """
+    return bool_fn(map(predicate, xs))
+
+
 def compose_iter(fn_list: List, initial_val):
     return reduce(lambda pipe, fn: pipe.then(fn), fn_list, Pipe(initial_val)).flush()
 
